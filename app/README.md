@@ -8,11 +8,11 @@ cloud database.
 | Page | What it does |
 |---|---|
 | **Overview** | Key numbers, executions per day (success vs failed), recent failures, events, activity |
-| **Projects** | Reads `n8n workflows/<slug>/` live (the folders are the source of truth). Create a project (runs `scripts/new-project.ps1`, optionally with the client's brief and files), change its status and **Edit details** (name, purpose, client, version, started: updates the top of the README and the registry; the rest of the README is left to agents), browse its workflows and docs. Each project has a **Client brief** card: edit `client-brief/brief.md` in place, and add, open, or remove the client's files in `client-brief/files/` (drag and drop, up to 25 MB each). **Start an agent** gives a prompt to paste into Claude Code or Codex so it starts with the project's full context |
+| **Projects** | Reads `n8n workflows/<slug>/` live (the folders are the source of truth). Create a project (runs `scripts/new-project.ps1`, optionally with the client's brief and files), change its status and **Edit details** (name, purpose, client, version, started: updates the top of the README and the registry; the rest of the README is left to agents), browse its workflows and docs. Each project has a **Client brief** card: edit `client-brief/brief.md` in place, and add, open, or remove the client's files in `client-brief/files/` (drag and drop, up to 25 MB each). **Start an agent** gives a prompt to paste into Claude Code or Codex so it starts with the project's full context. Each card shows its **backup state** (see Backups below) |
 | **Workflows** | Lists every n8n workflow as New / Changed in n8n / Up to date versus the backups in project folders. Import or update them one by one or in bulk (with confirmation): sanitized JSON goes into `n8n workflows/<project>/workflows/`, plus a changelog entry. Auto-matches projects by `[slug]` name or tag; hardcoded secrets are refused. The **⚙ button** on each row opens that workflow's settings (below). The **Needs attention** tab lists alerts and published workflows without an error workflow. Sort (latest / oldest edited, name) and filter by published and imported. The **In n8n** badge on each row shows Published / Not published; click it to publish or unpublish (always confirmed). The list is cached (see below), so the page opens instantly; **Refresh** re-reads n8n |
 | **Logs** | Three logs, each with search, filters, pagination, and a **Live** auto-refresh: n8n executions, the event inbox, app activity |
 | **Docs & skills** | `AGENTS.md`, `Documentation/`, templates, and every skill, rendered with search |
-| **Settings** | **n8n instances** (add/edit/test/sync/remove any number of n8n servers; keys go to `.env.local` as `N8N_API_KEY__<ID>`), auto-sync interval, log retention, event-inbox token, **Recently deleted** projects (restore within 30 days), app maintenance, DB info |
+| **Settings** | **n8n instances** (add/edit/test/sync/remove any number of n8n servers; keys go to `.env.local` as `N8N_API_KEY__<ID>`), auto-sync interval, log retention, event-inbox token, **Backups** (scheduled auto-export, optional auto-commit), **Recently deleted** projects (restore within 30 days), app maintenance, DB info |
 
 ## Run it
 
@@ -110,6 +110,23 @@ endpoint.
 stops a web page on another domain from re-pointing its own name at your PC (DNS rebinding) and
 driving the app from your browser. Reaching it under another name (a tunnel, a LAN hostname)? Add
 that name to `CONTROL_CENTER_HOSTS` in `.env.local` and restart.
+
+## Backups (git)
+
+Every project has its own private git repo (`n8n workflows/<slug>/.git`). The app never pushes:
+sending history to a remote stays a manual step.
+
+- **Backup chip** on each project card: `no git`, `not committed`, `N changed`, `no remote`,
+  `N unpushed` or `backed up`. Hover it for the details.
+- **Backup card** on the project page: **Commit N changes…** lists the changed files and suggests a
+  message. If a workflow JSON changed but the CHANGELOG didn't, it asks for a changelog line and adds
+  it under [Unreleased] in the same commit. Every file is checked for secrets first (API keys, bearer
+  and bot tokens, JWTs, private keys…); one hit and nothing is committed. **Set up git** creates the
+  repo when a project has none. Without a remote, the card shows the commands to add a **private** one.
+- **New projects** created in the app get a first commit right away.
+- **Settings → Backups:** export workflows that changed in n8n every N hours (0 = off), with an
+  optional auto-commit of just those files. Only workflows already saved in a project are updated;
+  new workflows still go through Import. **Export changed workflows now** runs it once.
 
 ## Deleting a project
 

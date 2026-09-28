@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { type ActionState, createProjectAction, saveSettingsAction } from '@/app/actions'
+import { type ActionState, createProjectAction, saveBackupSettingsAction, saveSettingsAction } from '@/app/actions'
 import type { Settings } from '@/lib/settings'
 import { transliterate } from '@/lib/transliterate'
 
@@ -111,6 +111,31 @@ export function NewProjectForm({ initialSlug = '' }: { initialSlug?: string }) {
       <div className="row">
         <Submit pending={pending || !valid} pendingLabel="Creating…">
           Create project
+        </Submit>
+        <Result state={state} />
+      </div>
+    </form>
+  )
+}
+
+export function BackupSettingsForm({ settings }: { settings: Settings }) {
+  const [state, action, pending] = useActionState(saveBackupSettingsAction, null)
+  return (
+    <form action={action} className="stack-sm" style={{ gap: 'var(--gap)' }}>
+      <div className="form-grid">
+        <div className="field">
+          <label htmlFor="autoExportHours">Auto-export changed workflows every (hours)</label>
+          <input id="autoExportHours" name="autoExportHours" type="number" min={0} max={168} className="input" defaultValue={settings.autoExportHours} />
+          <span className="hint">0 turns it off. Only workflows already saved in a project are updated; new ones still need Import.</span>
+        </div>
+      </div>
+      <label className="check">
+        <input type="checkbox" name="autoCommit" defaultChecked={Boolean(settings.autoCommit)} /> Also commit the exported files in each project&rsquo;s repo
+      </label>
+      <span className="hint">Files with a secret in them are skipped, and nothing is ever pushed.</span>
+      <div className="row">
+        <Submit pending={pending} pendingLabel="Saving…">
+          Save backup settings
         </Submit>
         <Result state={state} />
       </div>

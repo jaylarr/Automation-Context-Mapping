@@ -15,7 +15,9 @@ import {
   STATUSES,
   type Status,
   TRASH_DAYS,
+  commitProject,
   createProject,
+  setupProjectRepo,
   listProjects,
   projectBackupStatus,
   purgeFromTrash,
@@ -32,6 +34,7 @@ import { saveSettings, setMeta } from '@/lib/settings'
 import { setEnvValues } from '@/lib/envfile'
 import { type MaintenanceAction, launchMaintenance } from '@/lib/maintenance'
 import { type ImportResult, importWorkflow } from '@/lib/workflow-import'
+import { runAutoExport } from '@/lib/auto-export'
 
 export type ActionState = { ok: boolean; message: string } | null
 
@@ -69,6 +72,7 @@ export async function createProjectAction(_prev: ActionState, form: FormData): P
   } catch (e) {
     logActivity({ level: 'error', action: 'brief.save', message: `Brief of ${slug} not saved: ${e instanceof Error ? e.message : e}`, project: slug })
   }
+  await initialCommit(slug)
   revalidatePath('/', 'layout')
   redirect(`/projects/${slug}`)
 }
@@ -159,6 +163,65 @@ export async function deleteProjectAction(slug: string, confirmation: string): P
   logActivity({ level: 'warn', action: 'project.delete', message: `Moved project ${slug} to the trash (kept ${TRASH_DAYS} days)`, project: slug, meta: { trashId: id } })
   // No revalidatePath here: the caller's card would unmount mid-transition. The client closes its dialog, then refreshes.
   return { ok: true, message: `Project ${slug} moved to the trash.` }
+}
+
+// ------------------------------------------------------------------ git backups (project repos; never pushes)
+
+export async function commitProjectAction(slug: string, message: string, changelogLine: string): Promise<ActionState> {
+  try {
+    const { sha, files } = await commitProject(slug, message, { changelogLine })
+    logActivity({ level: 'success', action: 'project.commit', message: `Committed ${files.length} file(s) in ${slug} (${sha})`, project: slug, meta: { sha, message, files } })
+    revalidatePath('/', 'layout')
+    return { ok: true, message: `Committed ${files.length} file${files.length === 1 ? '' : 's'} (${sha}).` }
+  } catch (e) {
+    const message2 = e instanceof Error ? e.message : 'Commit failed.'
+    logActivity({ level: 'warn', action: 'project.commit', message: `Commit in ${slug} refused: ${message2}`, project: slug })
+    return { ok: false, message: message2 }
+  }
+}
+
+export async function setupRepoAction(slug: string): Promise<ActionState> {
+  try {
+    await setupProjectRepo(slug)
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message.split('\n')[0] : 'Could not set up git.' }
+  }
+  logActivity({ level: 'info', action: 'project.git-init', message: `Created the private git repo for ${slug}`, project: slug })
+  revalidatePath('/', 'layout')
+  return { ok: true, message: 'Git repo created. Commit to save the first snapshot.' }
+}
+
+export async function saveBackupSettingsAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const autoExportHours = intIn(form.get('autoExportHours'), 0, 168)
+  if (autoExportHours === null) return { ok: false, message: 'Auto-export interval: 0 (off) to 168 hours.' }
+  const autoCommit = form.get('autoCommit') === 'on' ? 1 : 0
+  saveSettings({ autoExportHours, autoCommit })
+  logActivity({ level: 'info', action: 'settings.save', message: 'Backup settings updated', meta: { autoExportHours, autoCommit } })
+  revalidatePath('/settings')
+  return { ok: true, message: autoExportHours ? `Saved. Changed workflows are exported every ${autoExportHours} h${autoCommit ? ' and committed' : ''}.` : 'Saved. Auto-export is off.' }
+}
+
+export async function runAutoExportAction(): Promise<ActionState> {
+  try {
+    const r = await runAutoExport('manual')
+    revalidatePath('/', 'layout')
+    const parts = [`${r.exported.length} workflow(s) updated`]
+    if (r.committed.length) parts.push(`committed in ${r.committed.join(', ')}`)
+    if (r.skipped.length) parts.push(`${r.skipped.length} skipped (see Logs → App activity)`)
+    return { ok: r.skipped.length === 0, message: `${parts.join(', ')}.` }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Auto-export failed.' }
+  }
+}
+
+/** First snapshot of a new project, so its history starts at creation. Problems are logged, not fatal. */
+async function initialCommit(slug: string): Promise<void> {
+  try {
+    const { sha } = await commitProject(slug, `${slug}: project created`)
+    logActivity({ level: 'info', action: 'project.commit', message: `First commit in ${slug} (${sha})`, project: slug })
+  } catch (e) {
+    logActivity({ level: 'warn', action: 'project.commit', message: `No first commit in ${slug}: ${e instanceof Error ? e.message : e}`, project: slug })
+  }
 }
 
 /** Read-only: git state of a project, so the delete dialog can say what exists only on this PC. */
@@ -543,6 +606,7 @@ export async function createProjectAndImportAction(
   logActivity({ level: 'success', action: 'project.create', message: `Created project ${slug} (from Workflows)`, project: slug, meta: { client: input.client } })
 
   const [result] = await importWorkflowsAction([{ instanceId, id: workflowId, project: slug }])
+  await initialCommit(slug)
   revalidatePath('/', 'layout')
   return result.ok
     ? { ok: true, message: `Project "${slug}" created and the workflow imported.`, result }

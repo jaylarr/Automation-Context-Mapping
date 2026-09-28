@@ -6,6 +6,7 @@ import { transliterate } from './transliterate'
 import { PROJECTS_DIR } from './paths'
 import { SLUG_RE, listProjects } from './projects'
 import { SECRET_PATTERNS } from './leak-scan'
+import { appendChangelog, localDate } from './changelog'
 
 /**
  * Import workflows from n8n into project folders as clean, importable JSON backups.
@@ -238,25 +239,6 @@ function nextNumber(projectDir: string): string {
   return String(max + 1).padStart(2, '0')
 }
 
-function appendChangelog(projectDir: string, line: string): void {
-  const file = path.join(projectDir, 'documentation', 'CHANGELOG.md')
-  if (!fs.existsSync(file)) return
-  let text = fs.readFileSync(file, 'utf8')
-  const unreleased = text.indexOf('## [Unreleased]')
-  if (unreleased === -1) {
-    text = text.replace(/\n*$/, `\n\n## [Unreleased]\n\n### Changed\n- ${line}\n`)
-  } else {
-    const after = unreleased + '## [Unreleased]'.length
-    const nextRelease = text.indexOf('\n## [', after)
-    const section = text.slice(after, nextRelease === -1 ? undefined : nextRelease)
-    const heading = section.indexOf('### Changed')
-    const insertAt =
-      heading === -1 ? after : after + heading + '### Changed'.length
-    const insert = heading === -1 ? `\n\n### Changed\n- ${line}` : `\n- ${line}`
-    text = text.slice(0, insertAt) + insert + text.slice(insertAt)
-  }
-  fs.writeFileSync(file, text, 'utf8')
-}
 
 export type ImportResult = { id: string; name: string; ok: boolean; message: string; project?: string; file?: string; instanceId?: string }
 
@@ -287,7 +269,7 @@ export async function importWorkflow(instanceId: string, id: string, chosenProje
     return { id, name: w.name, ok: true, message: 'Already up to date.', project, file }
 
   fs.writeFileSync(path.join(dir, file), `${JSON.stringify(clean, null, 2)}\n`, 'utf8')
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDate()
   appendChangelog(
     projectDir,
     `${file.replace(/\.json$/, '')}: ${tracked ? 'updated from n8n' : 'imported from n8n'} (${today}).`,

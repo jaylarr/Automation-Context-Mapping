@@ -1,8 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFile, execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { NEW_PROJECT_SCRIPT, PROJECTS_DIR, REGISTRY_FILE, SLUG_RE, WORKSPACE_ROOT, isInside } from './paths'
+import { INIT_REPO_SCRIPT, NEW_PROJECT_SCRIPT, PROJECTS_DIR, REGISTRY_FILE, SLUG_RE, WORKSPACE_ROOT, isInside } from './paths'
+import { type RepoStatus, commit, repoStatus } from './git'
+import { appendChangelog, localDate } from './changelog'
 import { type BriefState, briefState } from './brief'
 import { INFO_LIMITS } from './project-info'
 
@@ -482,34 +484,47 @@ export function purgeExpiredTrash(now = Date.now()): string[] {
     .map((t) => purgeFromTrash(t.id))
 }
 
-// ---------------------------------------------------------------- backup status (for the delete dialog)
+// ---------------------------------------------------------------- git (backups)
 
 export type BackupStatus = { hasRepo: boolean; remotes: string[]; uncommitted: number; unpushed: number | null }
 
+/** Full git state of a project repo (see lib/git.ts). */
+export function projectRepoStatus(slug: string): RepoStatus {
+  if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
+  return repoStatus(path.join(PROJECTS_DIR, slug))
+}
+
 /** What would be lost if this folder disappeared: is it in git, and has it left this PC? */
 export function projectBackupStatus(slug: string): BackupStatus {
+  const s = projectRepoStatus(slug)
+  return { hasRepo: s.hasRepo, remotes: s.remotes, uncommitted: s.changed.length, unpushed: s.tracking ? s.unpushed : null }
+}
+
+/**
+ * Commits a project's changes in its own repo. With `changelogLine`, the line is added to the
+ * CHANGELOG under [Unreleased] first, so it goes into the same commit. Never pushes.
+ */
+export async function commitProject(slug: string, message: string, opts: { changelogLine?: string; paths?: string[] } = {}) {
   if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
-  const cwd = path.join(PROJECTS_DIR, slug)
-  if (!fs.existsSync(path.join(cwd, '.git'))) return { hasRepo: false, remotes: [], uncommitted: 0, unpushed: null }
-  const git = (...args: string[]) => {
-    try {
-      return execFileSync('git', args, { cwd, encoding: 'utf8', timeout: 10_000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-    } catch {
-      return null
-    }
-  }
-  const lines = (s: string | null) => (s ? s.split('\n').filter(Boolean) : [])
-  const remotes = lines(git('remote'))
-  const upstream = git('rev-list', '--count', '@{upstream}..HEAD')
-  return {
-    hasRepo: true,
-    remotes,
-    uncommitted: lines(git('status', '--porcelain')).length,
-    unpushed: upstream === null ? null : Number(upstream),
-  }
+  const dir = path.join(PROJECTS_DIR, slug)
+  const line = opts.changelogLine?.replace(/[\r\n]+/g, ' ').trim()
+  if (line) appendChangelog(dir, `${line} (${localDate()}).`)
+  const paths = opts.paths && line ? [...opts.paths, 'documentation/CHANGELOG.md'] : opts.paths
+  return commit(dir, message, paths)
 }
 
 const execFileAsync = promisify(execFile)
+
+/** Creates the project's private repo with scripts/init-project-repo.ps1 (writes .gitignore, runs git init). */
+export async function setupProjectRepo(slug: string): Promise<void> {
+  if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
+  const shell = process.platform === 'win32' ? 'powershell.exe' : 'pwsh'
+  await execFileAsync(shell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', INIT_REPO_SCRIPT, '-Name', slug], {
+    cwd: WORKSPACE_ROOT,
+    timeout: 30_000,
+    windowsHide: true,
+  })
+}
 
 /** Scaffolds a project by running the workspace's own scripts/new-project.ps1 (single source of truth). */
 export async function createProject(input: {

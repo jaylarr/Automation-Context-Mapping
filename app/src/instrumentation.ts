@@ -25,6 +25,18 @@ export async function register() {
   purgeTrash()
   setInterval(purgeTrash, 60 * 60_000).unref()
 
+  // Scheduled auto-export of changed workflows (Settings → Backups). Checked every minute.
+  const { autoExportDue, runAutoExport } = await import('./lib/auto-export')
+  setInterval(() => {
+    try {
+      if (autoExportDue() && isConfigured()) runAutoExport('auto').catch(() => {
+        /* recorded in the activity log */
+      })
+    } catch {
+      /* never crash the server from the scheduler */
+    }
+  }, 60_000).unref()
+
   const TICK_MS = 60_000
   setInterval(() => {
     try {

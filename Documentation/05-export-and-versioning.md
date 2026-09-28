@@ -64,6 +64,12 @@ and **semantic versioning per project**:
 | **PATCH** (1.0.1) | Bug fix, retry tweak, wording, no behavior change for the client |
 
 ### Git
+
+**In the Control Center:** each project card shows its backup state, and the project page has a
+**Commit** button (secret check + CHANGELOG line, never pushes). Settings → Backups can export
+changed workflows on a schedule and commit them. Add a **private** remote per project so the history
+leaves this PC.
+
 - **Commit messages:** `<project-slug>: <what changed>`, e.g.
   `acme-lead-intake: add retry + 429 handling to enrichment`. Workspace-level changes use
   `workspace:`, `docs:`, or `skills:` as the prefix.

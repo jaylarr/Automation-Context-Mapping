@@ -9,6 +9,7 @@ export const DOCS_DIR = path.join(WORKSPACE_ROOT, 'Documentation')
 export const SKILLS_DIR = path.join(WORKSPACE_ROOT, 'Skills')
 export const REGISTRY_FILE = path.join(PROJECTS_DIR, 'REGISTRY.md') // local-only, gitignored
 export const NEW_PROJECT_SCRIPT = path.join(WORKSPACE_ROOT, 'scripts', 'new-project.ps1')
+export const INIT_REPO_SCRIPT = path.join(WORKSPACE_ROOT, 'scripts', 'init-project-repo.ps1')
 
 export const DATABASE_PATH = path.resolve(/* turbopackIgnore: true */ process.env.DATABASE_PATH || path.join(/* turbopackIgnore: true */ process.cwd(), 'data', 'control-center.db'))
 

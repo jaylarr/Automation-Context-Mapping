@@ -14,7 +14,9 @@ import { relativeTime } from '@/lib/format'
 import { listEvents, listExecutions } from '@/lib/logs'
 import { WORKSPACE_ROOT } from '@/lib/paths'
 import { listTestRuns } from '@/lib/test-results'
-import { STATUSES, getProject, readProjectDoc } from '@/lib/projects'
+import { STATUSES, getProject, projectRepoStatus, readProjectDoc } from '@/lib/projects'
+import { backupSummary } from '@/lib/git'
+import { BackupCard } from '@/components/backup-card'
 
 /** What to paste into Claude Code / Codex so it starts on this project with full context. */
 function kickoffPrompt(slug: string): string {
@@ -49,6 +51,7 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
     body: r.source !== null && <Markdown source={r.source} docId={`${prefix}test-results/${r.id}/result.md`} linkFor={(id) => `/docs?id=${encodeURIComponent(id)}`} />,
   }))
   const prompt = kickoffPrompt(slug)
+  const repo = projectRepoStatus(slug)
 
   return (
     <>
@@ -154,6 +157,8 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
         </div>
 
         <aside className="stack">
+          <BackupCard slug={slug} status={repo} summary={backupSummary(repo)} />
+
           <div className="card">
             <div className="card-head">
               <h2>Start an agent</h2>

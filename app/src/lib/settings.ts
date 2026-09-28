@@ -5,12 +5,16 @@ export type Settings = {
   syncIntervalMinutes: number // 0 = auto-sync off
   retentionDays: number
   syncLookbackPages: number // pages of 100 executions fetched per sync
+  autoExportHours: number // 0 = off; otherwise re-import workflows changed in n8n every N hours
+  autoCommit: number // 1 = commit auto-exported files in the project repo (never pushes)
 }
 
 const DEFAULTS: Settings = {
   syncIntervalMinutes: 10,
   retentionDays: 30,
   syncLookbackPages: 3,
+  autoExportHours: 0,
+  autoCommit: 0,
 }
 
 export function getSettings(): Settings {

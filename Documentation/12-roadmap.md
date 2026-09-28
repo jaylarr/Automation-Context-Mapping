@@ -18,7 +18,7 @@ Enterprise plan. Today the workspace covers the **backup + history** half for fr
 Center exports sanitized workflow JSON into each project folder, and each project has its own git
 repo. The steps below close the rest of the gap.
 
-### A1. "Commit" button (P1)
+### A1. "Commit" button (P1) — done 2026-09-29, see Done
 
 - **Problem:** after **Import** / **Update** on the Workflows page, you still have to open a
   terminal (or ask an agent) to commit the changed files.
@@ -40,7 +40,7 @@ repo. The steps below close the rest of the gap.
   many commits are waiting to go out.
 - **Notes:** uses the git credentials already on the machine. The app never stores GitHub tokens.
 
-### A3. Scheduled auto-export (P2)
+### A3. Scheduled auto-export (P2) — done 2026-09-29, see Done
 
 - **Problem:** backups depend on someone clicking Import. A workflow edited in n8n and never
   exported can be lost.
@@ -168,6 +168,7 @@ matter once there's a team or client-facing reporting.
 
 | Date | Feature |
 |---|---|
+| 2026-09-29 | **Backups (A1 + A3).** Backup chip on every project card, a Backup card with **Commit** (secret check, CHANGELOG line when workflows changed, never pushes) and **Set up git**, a first commit for projects created in the app, and scheduled auto-export with optional auto-commit (Settings → Backups). Secret patterns now also catch Telegram bot tokens, JWTs, Google and Stripe keys, Slack webhooks and private keys. |
 | 2026-09-28 | **Recoverable project delete.** Delete moves the project to `n8n workflows/_trash/` for 30 days; **Settings → Recently deleted** restores or purges it. The dialog warns when the project has no remote, unpushed commits, or uncommitted files. |
 | 2026-09-28 | **Host lock (DNS-rebinding guard).** `app/src/proxy.ts` answers only requests addressed to this machine; extra names via `CONTROL_CENTER_HOSTS`. |
 | 2026-09-28 | **CI + fresh-clone fix.** GitHub Actions builds the Control Center on Ubuntu, macOS and Windows from a clean checkout. |

@@ -1,11 +1,12 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { Archive, ClipboardList, FileJson, FolderKanban, Globe, Plus } from 'lucide-react'
+import { Archive, ClipboardList, FileJson, FolderKanban, GitBranch, Globe, Plus } from 'lucide-react'
 import { ProjectCardMenu } from '@/components/project-card-menu'
 import { getArchivedDisplay } from '@/lib/settings'
 import { EmptyState, PageHeader, ProjectStatusBadge } from '@/components/ui'
 import { relativeTime } from '@/lib/format'
-import { STATUSES, listProjects } from '@/lib/projects'
+import { STATUSES, listProjects, projectRepoStatus } from '@/lib/projects'
+import { backupSummary } from '@/lib/git'
 
 export const metadata: Metadata = { title: 'Projects' }
 
@@ -71,7 +72,9 @@ export default async function ProjectsPage(props: PageProps<'/projects'>) {
         </EmptyState>
       ) : (
         <section className="grid grid-cards">
-          {projects.map((p) => (
+          {projects.map((p) => {
+            const backup = backupSummary(projectRepoStatus(p.slug))
+            return (
             <article key={p.slug} className="card project-card" data-archived={p.archived ? (showArchived ? 'shown' : 'dimmed') : undefined}>
               <div className="card-head">
                 <Link href={`/projects/${p.slug}`} className="card-title truncate project-card-link">
@@ -110,11 +113,19 @@ export default async function ProjectsPage(props: PageProps<'/projects'>) {
                       <Globe size={14} aria-hidden /> website
                     </span>
                   )}
+                  <span
+                    className="row"
+                    style={{ gap: 'var(--s-1)', color: backup.tone === 'ok' ? undefined : backup.tone === 'err' ? 'var(--err)' : 'var(--warn)' }}
+                    title={backup.detail}
+                  >
+                    <GitBranch size={14} aria-hidden /> {backup.label}
+                  </span>
                 </span>
                 <span>updated {relativeTime(p.updatedAt)}</span>
               </div>
             </article>
-          ))}
+            )
+          })}
         </section>
       )}
     </>

@@ -1,5 +1,9 @@
 import type { Metadata } from 'next'
-import { SettingsForm } from '@/components/forms'
+import { BackupSettingsForm, SettingsForm } from '@/components/forms'
+import { ActionButton } from '@/components/action-button'
+import { runAutoExportAction } from '@/app/actions'
+import { lastAutoExport } from '@/lib/auto-export'
+import { relativeTime } from '@/lib/format'
 import { TokenControls } from '@/components/connection-forms'
 import { InstancesManager } from '@/components/instances-manager'
 import { MaintenanceCard } from '@/components/maintenance-card'
@@ -24,6 +28,8 @@ export default function SettingsPage() {
   const connected = instances.filter((i) => i.hasKey).length
   const hasToken = Boolean(env.ingestToken())
   const selfManage = canSelfManage()
+  const settings = getSettings()
+  const lastRun = lastAutoExport()
 
   const curl = `curl -X POST http://127.0.0.1:3100/api/events \\
   -H "content-type: application/json" \\
@@ -75,6 +81,29 @@ export default function SettingsPage() {
         <pre className="mono" style={{ margin: 0, padding: 'var(--s-4)', background: 'var(--field)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflowX: 'auto' }}>
           {curl}
         </pre>
+      </section>
+
+      <section className="card" id="backups">
+        <div className="card-head">
+          <h2>Backups</h2>
+          <StatusBadge status={settings.autoExportHours ? `every ${settings.autoExportHours} h` : 'auto-export off'} tone={settings.autoExportHours ? 'ok' : 'warn'} />
+        </div>
+        <p className="small muted">
+          Each project has its own private git repo. Commit from a project&rsquo;s page, or let the app export workflows that changed in n8n on a
+          schedule (optionally committing them). Pushing to a remote is always a manual step.
+        </p>
+        <BackupSettingsForm settings={settings} />
+        <hr className="divider" />
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <span className="small faint">
+            {lastRun
+              ? `Last run ${relativeTime(lastRun.at)}: ${lastRun.exported.length} updated, ${lastRun.committed.length} committed, ${lastRun.skipped.length} skipped.`
+              : 'Not run yet.'}
+          </span>
+          <ActionButton action={runAutoExportAction} pendingLabel="Exporting…">
+            Export changed workflows now
+          </ActionButton>
+        </div>
       </section>
 
       <section className="card" id="trash">
