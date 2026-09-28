@@ -515,18 +515,18 @@ export async function commitProject(slug: string, message: string, opts: { chang
 
 const execFileAsync = promisify(execFile)
 
-/** Creates the project's private repo with scripts/init-project-repo.ps1 (writes .gitignore, runs git init). */
-export async function setupProjectRepo(slug: string): Promise<void> {
-  if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
-  const shell = process.platform === 'win32' ? 'powershell.exe' : 'pwsh'
-  await execFileAsync(shell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', INIT_REPO_SCRIPT, '-Name', slug], {
-    cwd: WORKSPACE_ROOT,
-    timeout: 30_000,
-    windowsHide: true,
-  })
+/** Runs one of the workspace's Node scripts with this same Node binary (works on every OS). */
+function runScript(script: string, args: string[]) {
+  return execFileAsync(process.execPath, [script, ...args], { cwd: WORKSPACE_ROOT, timeout: 30_000, windowsHide: true })
 }
 
-/** Scaffolds a project by running the workspace's own scripts/new-project.ps1 (single source of truth). */
+/** Creates the project's private repo with scripts/init-project-repo.mjs (writes .gitignore, runs git init). */
+export async function setupProjectRepo(slug: string): Promise<void> {
+  if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
+  await runScript(INIT_REPO_SCRIPT, ['--name', slug])
+}
+
+/** Scaffolds a project by running the workspace's own scripts/new-project.mjs (single source of truth). */
 export async function createProject(input: {
   slug: string
   client: string
@@ -537,22 +537,8 @@ export async function createProject(input: {
   if (fs.existsSync(path.join(PROJECTS_DIR, input.slug))) throw new Error(`A project named "${input.slug}" already exists.`)
   const clean = (s: string) => s.replace(/[\r\n"`$]/g, ' ').trim().slice(0, 200)
 
-  const shell = process.platform === 'win32' ? 'powershell.exe' : 'pwsh'
-  const args = [
-    '-NoProfile',
-    '-NonInteractive',
-    '-ExecutionPolicy',
-    'Bypass',
-    '-File',
-    NEW_PROJECT_SCRIPT,
-    '-Name',
-    input.slug,
-    '-Client',
-    clean(input.client) || 'TODO',
-    '-Purpose',
-    clean(input.purpose) || 'TODO: one-line purpose',
-  ]
-  if (!input.website) args.push('-NoWebsite')
-  const { stdout } = await execFileAsync(shell, args, { cwd: WORKSPACE_ROOT, timeout: 30_000, windowsHide: true })
+  const args = ['--name', input.slug, '--client', clean(input.client) || 'TODO', '--purpose', clean(input.purpose) || 'TODO: one-line purpose']
+  if (!input.website) args.push('--no-website')
+  const { stdout } = await runScript(NEW_PROJECT_SCRIPT, args)
   return stdout
 }

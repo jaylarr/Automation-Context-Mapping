@@ -33,13 +33,37 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
 
-  hooks:
-    name: Claude Code hooks parse
-    runs-on: ubuntu-latest
+  scripts:
+    name: Workspace scripts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Syntax-check hook scripts
-        run: for f in scripts/hooks/*.mjs; do node --check "$f"; done
+      - name: Syntax-check scripts and hooks
+        run: for f in scripts/*.mjs scripts/lib/*.mjs scripts/hooks/*.mjs; do node --check "$f"; done
+      - name: Scaffold a project into a temp folder
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+          root="$RUNNER_TEMP/projects"
+          mkdir -p "$root"
+          node scripts/new-project.mjs --name ci-smoke-test --client "CI" --no-website --projects-root "$root"
+          test -f "$root/ci-smoke-test/README.md"
+          test -f "$root/ci-smoke-test/documentation/CHANGELOG.md"
+          test -d "$root/ci-smoke-test/.git"
+          test ! -d "$root/ci-smoke-test/website"
+          ! grep -R "{{PROJECT_SLUG}}" "$root/ci-smoke-test"
+      - name: Link skills
+        run: |
+          node scripts/link-skills.mjs
+          test -f .claude/skills/n8n-workflow-export/SKILL.md
+          test -f .agents/skills/n8n-workflow-export/SKILL.md

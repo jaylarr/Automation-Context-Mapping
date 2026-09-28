@@ -8,12 +8,12 @@ Automation Context Mapping/                 ← MAIN FOLDER (git repo)
 ├── CLAUDE.md                               ← "@AGENTS.md" so Claude Code reads the same rules
 ├── README.md
 ├── .gitignore
-├── .agents/skills  → Skills/               ← junction (gitignored), made by scripts/link-skills.ps1
+├── .agents/skills  → Skills/               ← junction (gitignored), made by scripts/link-skills.mjs
 ├── app/                                    ← Control Center (local Next.js + SQLite dashboard)
 │   └── data/                               ← SQLite file (gitignored)
 ├── scripts/
-│   ├── new-project.ps1                     ← scaffold a project from _template
-│   └── link-skills.ps1                     ← (re)create the .agents/skills junction
+│   ├── new-project.mjs                     ← scaffold a project from _template
+│   └── link-skills.mjs                     ← (re)create the .agents/skills junction
 ├── Documentation/                          ← GLOBAL docs (this folder)
 │   └── templates/
 ├── Skills/
@@ -81,5 +81,5 @@ Codex, Cursor, and other agents that follow the Agent Skills standard auto-disco
 and two paths to reach them. The junction is gitignored, so after cloning run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/link-skills.ps1
+node scripts/link-skills.mjs
 ```

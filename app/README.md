@@ -8,7 +8,7 @@ cloud database.
 | Page | What it does |
 |---|---|
 | **Overview** | Key numbers, executions per day (success vs failed), recent failures, events, activity |
-| **Projects** | Reads `n8n workflows/<slug>/` live (the folders are the source of truth). Create a project (runs `scripts/new-project.ps1`, optionally with the client's brief and files), change its status and **Edit details** (name, purpose, client, version, started: updates the top of the README and the registry; the rest of the README is left to agents), browse its workflows and docs. Each project has a **Client brief** card: edit `client-brief/brief.md` in place, and add, open, or remove the client's files in `client-brief/files/` (drag and drop, up to 25 MB each). **Start an agent** gives a prompt to paste into Claude Code or Codex so it starts with the project's full context. Each card shows its **backup state** (see Backups below) |
+| **Projects** | Reads `n8n workflows/<slug>/` live (the folders are the source of truth). Create a project (runs `scripts/new-project.mjs`, optionally with the client's brief and files), change its status and **Edit details** (name, purpose, client, version, started: updates the top of the README and the registry; the rest of the README is left to agents), browse its workflows and docs. Each project has a **Client brief** card: edit `client-brief/brief.md` in place, and add, open, or remove the client's files in `client-brief/files/` (drag and drop, up to 25 MB each). **Start an agent** gives a prompt to paste into Claude Code or Codex so it starts with the project's full context. Each card shows its **backup state** (see Backups below) |
 | **Workflows** | Lists every n8n workflow as New / Changed in n8n / Up to date versus the backups in project folders. Import or update them one by one or in bulk (with confirmation): sanitized JSON goes into `n8n workflows/<project>/workflows/`, plus a changelog entry. Auto-matches projects by `[slug]` name or tag; hardcoded secrets are refused. The **⚙ button** on each row opens that workflow's settings (below). The **Needs attention** tab lists alerts and published workflows without an error workflow. Sort (latest / oldest edited, name) and filter by published and imported. The **In n8n** badge on each row shows Published / Not published; click it to publish or unpublish (always confirmed). The list is cached (see below), so the page opens instantly; **Refresh** re-reads n8n |
 | **Logs** | Three logs, each with search, filters, pagination, and a **Live** auto-refresh: n8n executions, the event inbox, app activity |
 | **Docs & skills** | `AGENTS.md`, `Documentation/`, templates, and every skill, rendered with search |
@@ -18,15 +18,25 @@ cloud database.
 
 ### As a regular app (recommended)
 
-From the workspace root, run once:
+From the workspace root, run once (any OS):
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/control-center.ps1 install
+```bash
+node scripts/control-center.mjs install
 ```
 
-This builds the optimized production version and registers a Windows login task
-("Automation Control Center") that starts it hidden in the background every time you log in.
-It's always at **http://127.0.0.1:3100**, with no terminal window and no `npm run dev`.
+This builds the optimized production version and registers it to start in the background every time
+you log in:
+
+| OS | How it runs | Commands |
+|---|---|---|
+| Windows | Login task "Automation Control Center" with a supervisor (`control-center.mjs` hands over to `control-center.ps1`) | `install` `update` `start` `stop` `restart` `status` `logs` `open` `uninstall` |
+| macOS | launchd agent `~/Library/LaunchAgents/com.automation-workspace.control-center.plist` (restarts on crash) | same |
+| Linux | systemd user service `automation-control-center.service` (restarts on crash). Run `loginctl enable-linger $USER` once to keep it running while logged out | same |
+
+It's always at **http://127.0.0.1:3100**, with no terminal window and no `npm run dev`. On macOS
+and Linux, `update` also builds alongside the running version and rolls back if the new one
+doesn't start. The in-app **Restart / Update** buttons below are Windows-only for now; on macOS and
+Linux use the terminal commands.
 
 **App window:** open http://127.0.0.1:3100 in Chrome or Edge and click **Install** in the address
 bar (or ⋮ → Cast, save and share → Install page as app). You get its own window with a taskbar and
@@ -42,7 +52,7 @@ Both ask for confirmation first. Their output is in the **Maintenance log** on t
 
 The same actions from a terminal (use the full path if you're not in the workspace folder):
 
-| Command (`scripts/control-center.ps1 <action>`) | Does |
+| Command (`node scripts/control-center.mjs <action>`) | Does |
 |---|---|
 | `status` | Is the login task registered, and is the server up? |
 | `update` | After code changes or a `git pull`: build alongside, swap, auto-rollback on failure |

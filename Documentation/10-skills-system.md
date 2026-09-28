@@ -30,7 +30,7 @@ Python, workflow patterns). Each of those has a `SOURCE.md` that maps its names 
 ## How agents find skills
 
 - `.agents/skills/` is a junction to `Skills/`, and Codex and Cursor auto-discover it.
-  Run `scripts/link-skills.ps1` after cloning.
+  Run `scripts/link-skills.mjs` after cloning.
 - Claude Code reads `.claude/skills/`. The same script creates that junction too. You may also have
   the czlonkowski pack installed globally in `~/.claude/skills`. **Inside this workspace, prefer
   the `*-official` skills** (they match the MCP we use).

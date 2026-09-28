@@ -26,7 +26,7 @@ done**.
 
 ## Templates
 
-Copy these instead of starting from a blank page. `scripts/new-project.ps1` copies the project
+Copy these instead of starting from a blank page. `scripts/new-project.mjs` copies the project
 ones automatically.
 
 | Template | Used for |

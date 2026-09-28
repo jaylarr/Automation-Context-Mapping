@@ -92,4 +92,4 @@ more.
 
 Hooks are configured in `.claude/settings.json` (committed). Claude Code asks you to trust the
 project's hooks the first time you open the workspace. To review or disable them, use `/hooks` in
-an interactive `claude` terminal. The skill junctions are recreated with `scripts/link-skills.ps1`.
+an interactive `claude` terminal. The skill junctions are recreated with `scripts/link-skills.mjs`.

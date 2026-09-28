@@ -36,9 +36,9 @@ and `Documentation/03-naming-conventions.md`.
 2. **Check it doesn't exist:** list `n8n workflows/` and read `n8n workflows/REGISTRY.md` (local-only; may not exist yet).
 3. **Dry run first** and show the owner the output:
    ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts/new-project.ps1 -Name <slug> -Client "<Client>" -Purpose "<one line>" -DryRun
+   node scripts/new-project.mjs --name <slug> --client "<Client>" --purpose "<one line>" --dry-run
    ```
-4. **Create** by running the same command without `-DryRun`.
+4. **Create** by running the same command without `--dry-run`.
 5. **Save the brief** if the owner gave one (non-negotiable 4). **Fill in** the new `AGENTS.md` with whatever is known (instances, credential names,
    constraints, alert destination). Leave unknowns as `TODO`.
 6. **Discovery:** if a client call is next, point the owner to
@@ -58,6 +58,6 @@ and `Documentation/03-naming-conventions.md`.
 | Mistake | What goes wrong | Fix |
 |---|---|---|
 | Slug with spaces or capitals (`Acme Lead Intake`) | Breaks webhook paths, tags, and CLI use | kebab-case only |
-| Creating the folder by hand | Missing docs; registry out of sync | Use `scripts/new-project.ps1` |
+| Creating the folder by hand | Missing docs; registry out of sync | Use `scripts/new-project.mjs` |
 | Building workflows before the spec | Rework; scope creep | Discovery → spec → build (`Documentation/02-how-i-work.md`) |
 | Putting instance URLs or credential names in the global AGENTS.md | Project facts leak into every project | They go in the project's `AGENTS.md` |

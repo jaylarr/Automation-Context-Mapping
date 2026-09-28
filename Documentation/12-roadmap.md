@@ -121,7 +121,7 @@ matter once there's a team or client-facing reporting.
 - **Idea:** simple sign-in with roles: **owner** (everything), **builder** (projects and workflows,
   no settings), and later **client** (C4).
 
-### C3. Cross-platform setup (P3)
+### C3. Cross-platform setup (P3) — scripts + auto-start done 2026-09-29, see Done; Docker still open
 
 - **Problem:** the scripts and the auto-start helper are Windows/PowerShell only.
 - **Idea:** a Docker-based setup (also used by C1), plus shell versions of `new-project` and
@@ -168,6 +168,7 @@ matter once there's a team or client-facing reporting.
 
 | Date | Feature |
 |---|---|
+| 2026-09-29 | **macOS + Linux.** `new-project`, `init-project-repo` and `link-skills` are Node scripts (`scripts/*.mjs`; the `.ps1` files are Windows wrappers); the app calls them with Node. `scripts/control-center.mjs` installs the Control Center as a launchd agent (macOS) or systemd user service (Linux), with a safe `update` + rollback. CI runs the scripts on Ubuntu, macOS and Windows. In-app Restart/Update stays Windows-only. |
 | 2026-09-29 | **Backups (A1 + A3).** Backup chip on every project card, a Backup card with **Commit** (secret check, CHANGELOG line when workflows changed, never pushes) and **Set up git**, a first commit for projects created in the app, and scheduled auto-export with optional auto-commit (Settings → Backups). Secret patterns now also catch Telegram bot tokens, JWTs, Google and Stripe keys, Slack webhooks and private keys. |
 | 2026-09-28 | **Recoverable project delete.** Delete moves the project to `n8n workflows/_trash/` for 30 days; **Settings → Recently deleted** restores or purges it. The dialog warns when the project has no remote, unpushed commits, or uncommitted files. |
 | 2026-09-28 | **Host lock (DNS-rebinding guard).** `app/src/proxy.ts` answers only requests addressed to this machine; extra names via `CONTROL_CENTER_HOSTS`. |

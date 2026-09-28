@@ -5,8 +5,8 @@ upgraded, or misconfigured. Every shipped workflow lives in git as an **importab
 
 > **Projects are not in this (public) workspace repo.** `n8n workflows/<project>/` is gitignored so
 > client work stays private. Each project has its **own private repo** at
-> `n8n workflows/<project>/.git`. `scripts/new-project.ps1` creates it, and
-> `scripts/init-project-repo.ps1 -Name <slug>` adds one to an existing project. The git rules
+> `n8n workflows/<project>/.git`. `scripts/new-project.mjs` creates it, and
+> `node scripts/init-project-repo.mjs --name <slug>` adds one to an existing project. The git rules
 > below apply to that repo. A remote is optional and must be **private** (per client, so it can be
 > handed over). Release tags are plain `v1.1.0`, since the repo is already per project.
 

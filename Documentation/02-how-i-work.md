@@ -35,7 +35,7 @@ change request (it loops back here).
 
 ## 3. Design: architecture before nodes
 
-- Create the project: `scripts/new-project.ps1` or the `new-automation-project` skill.
+- Create the project: `scripts/new-project.mjs` or the `new-automation-project` skill.
 - **Size it first** (`n8n-project-sizing` skill): estimate the node count for the whole project,
   then decide with the owner whether it's **one workflow or several**. Record the choice in
   `documentation/decisions.md`.

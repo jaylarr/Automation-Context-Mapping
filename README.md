@@ -15,13 +15,14 @@ Automation Context Mapping/
 │       ├── website/         optional web app
 │       └── documentation/   project docs
 ├── app/                 ← Control Center: local dashboard (Next.js + SQLite)
-└── scripts/             ← new-project.ps1, init-project-repo.ps1, link-skills.ps1,
-                           control-center.ps1, hooks/ (Claude Code guardrails)
+└── scripts/             ← new-project.mjs, init-project-repo.mjs, link-skills.mjs,
+                           control-center.mjs (+ .ps1 on Windows), hooks/ (Claude Code guardrails)
 ```
 
 ## Requirements
 
-- **Windows** with Windows PowerShell 5.1+ (the scripts are PowerShell; macOS/Linux aren't supported yet)
+- **Windows, macOS or Linux.** The scripts are Node (`scripts/*.mjs`); the `.ps1` files are Windows
+  shortcuts to the same scripts
 - **Node.js 20.9+** (Claude Code hooks, Control Center) and **git**
 - A **self-hosted n8n** with the official **instance-level MCP** enabled (Settings → MCP), connected
   to your agent
@@ -33,7 +34,7 @@ Automation Context Mapping/
 alike, since the skill folders they read are links, not part of the repo:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/link-skills.ps1
+node scripts/link-skills.mjs
 ```
 
 Then copy `AGENTS.local.example.md` to `AGENTS.local.md` and fill in your name, credential names,
@@ -50,7 +51,7 @@ They're yours to fill in; agents are told never to invent them.
 **New automation project:**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/new-project.ps1 -Name acme-lead-intake -Client "Acme Co"
+node scripts/new-project.mjs --name acme-lead-intake --client "Acme Co"
 ```
 
 Or just ask your agent to *"start a new automation project for …"*. The `new-automation-project`
@@ -60,11 +61,12 @@ skill handles it.
 
 ```powershell
 copy app\.env.example app\.env.local      # then fill in the values
-powershell -ExecutionPolicy Bypass -File scripts/control-center.ps1 install
+node scripts/control-center.mjs install
 ```
 
-It then runs in the background from every login at http://127.0.0.1:3100. Install it as an app
-from Chrome/Edge for its own window. After code changes: `scripts/control-center.ps1 update`.
+It then runs in the background from every login at http://127.0.0.1:3100 (Windows: a login task;
+macOS: a launchd agent; Linux: a systemd user service). Install it as an app
+from Chrome/Edge for its own window. After code changes: `node scripts/control-center.mjs update`.
 See [app/README.md](app/README.md).
 
 ## What stays local
@@ -76,7 +78,7 @@ The repo is public, so these are gitignored and never pushed:
 - `app/.env.local` and `app/data/` (the Control Center's database, logs, and tokens)
 
 Instead, each project gets its **own private git repo** (`n8n workflows/<project>/.git`, created
-by `new-project.ps1`; add one to an existing project with `scripts/init-project-repo.ps1 -Name <slug>`).
+by `new-project.mjs`; add one to an existing project with `node scripts/init-project-repo.mjs --name <slug>`).
 It's local until you add a remote, and a remote must be a **private** repo.
 
 ## Where to read next

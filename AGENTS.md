@@ -50,7 +50,7 @@ other agents must follow them from this file.
 | `n8n workflows/<project>/website/` | Optional web app or site that belongs to the project |
 | `n8n workflows/<project>/client-brief/` | What the client asked for, in their words (`brief.md` + `files/`). Written by the owner, often in the Control Center. Agents read it and never edit it |
 | `n8n workflows/<project>/documentation/` | That project's spec, architecture, changelog, decisions, and handover (agent-maintained) |
-| `scripts/` | Workspace helpers (`new-project.ps1`, `link-skills.ps1`) |
+| `scripts/` | Workspace helpers (`new-project.mjs`, `link-skills.mjs`) |
 | [`app/`](app/README.md) | **Control Center**: local Next.js + SQLite dashboard (projects, n8n execution logs, event inbox, docs). Reads the folders above; never the source of truth |
 | `.agents/skills` | A junction to `Skills/`, so Codex and Cursor auto-discover skills. Don't edit files through it |
 
@@ -98,7 +98,7 @@ Full rules: [03-naming-conventions.md](Documentation/03-naming-conventions.md) Â
 
 | Task | Do this |
 |---|---|
-| Start a new automation project | `new-automation-project` skill (or `scripts/new-project.ps1 -Name <kebab-name>`) |
+| Start a new automation project | `new-automation-project` skill (or `node scripts/new-project.mjs --name <kebab-name>`) |
 | Size a project: one workflow or several? | `n8n-project-sizing` skill (estimate nodes, then ask the owner) |
 | Build or edit a workflow via MCP | [11-ai-agent-workflow.md](Documentation/11-ai-agent-workflow.md) + `using-n8n-skills-official` |
 | Save a workflow from n8n into the repo | `n8n-workflow-export` skill |
@@ -115,7 +115,8 @@ Full rules: [03-naming-conventions.md](Documentation/03-naming-conventions.md) Â
 - **MCP:** the official n8n instance-level MCP (`get_workflow_sdk_reference`, `search_nodes`,
   `get_node_types`, `validate_workflow`, `create_workflow_from_code`, `update_workflow`, â€¦).
   Tool names drift between versions, so trust the live tool list.
-- **OS:** Windows (PowerShell). Paths contain spaces (`n8n workflows/`), so always quote them.
+- **OS:** Windows, macOS or Linux. Workspace scripts are Node (`node scripts/<name>.mjs`); the `.ps1`
+  files are Windows wrappers. Paths contain spaces (`n8n workflows/`), so always quote them.
 - **No n8n env vars / Variables:** not every n8n plan includes them, so never use `$env` or `$vars`
   in workflows. Put config in the workflow, a Data Table, or credentials.
 - **The owner's own credentials** (internal work, even on HTTP Request nodes) are listed in
