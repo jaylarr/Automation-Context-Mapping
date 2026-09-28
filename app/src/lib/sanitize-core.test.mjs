@@ -1,8 +1,13 @@
 // Tests for the shared sanitizer. Run: npm test (in app/). Uses node:test, no dependencies.
-// All tokens below are fake, made only to match the formats.
+// All tokens below are fake, made only to match the formats. They are assembled at runtime with
+// fake() so no literal token-shaped string sits in the repo (secret scanners would flag it).
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { checkImportable, findHardcodedSecret, findSecretInText, fingerprint, sanitizeWorkflow, slugifyName } from './sanitize-core.mjs'
+
+/** Joins the parts of a made-up sample token. */
+const fake = (...parts) => parts.join('')
+const FAKE_BOT = fake('123456789', ':', 'AA', 'x'.repeat(33))
 
 const node = (name, parameters = {}, extra = {}) => ({ id: `id-${name}`, name, type: 'n8n-nodes-base.set', typeVersion: 3.5, position: [0, 0], parameters, ...extra })
 
@@ -93,7 +98,7 @@ test('a literal value in a key-like field is caught; expressions are not', () =>
 
 test('a bot token inside Code is caught', () => {
   const w = raw()
-  w.nodes.push(node('Code', { jsCode: "const t = '123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw1'" }))
+  w.nodes.push(node('Code', { jsCode: `const t = '${FAKE_BOT}'` }))
   assert.match(findHardcodedSecret(w), /Code: a Telegram bot token/)
 })
 
@@ -101,16 +106,16 @@ test('a bot token inside Code is caught', () => {
 
 test('every known secret format is caught', () => {
   const samples = {
-    'an API key (sk-…)': 'sk-proj-abcdefghijklmnopqrstuv',
-    'a Stripe live key': 'sk_live_abcdefghijklmnopqrstuv',
-    'a Slack token': 'xoxb-1234567890-abcdef',
-    'a Slack webhook URL': 'https://hooks.slack.com/services/T0000000/B0000000/abcdefghijklmnopqrstu',
-    'a GitHub token': 'ghp_abcdefghijklmnopqrstuvwxyz0123456789',
-    'an AWS access key': 'AKIAABCDEFGHIJKLMNOP',
-    'a Google API key': 'AIzaSyA1234567890abcdefghijklmnopqrstuv',
-    'a Telegram bot token': '123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw1',
-    'a JWT (for example an n8n API key)': 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop',
-    'a private key': '-----BEGIN RSA PRIVATE KEY-----',
+    'an API key (sk-…)': fake('sk-', 'x'.repeat(24)),
+    'a Stripe live key': fake('sk_', 'live_', 'x'.repeat(24)),
+    'a Slack token': fake('xox', 'b-', '0'.repeat(12)),
+    'a Slack webhook URL': fake('https://hooks.', 'slack.com/services/', 'T0000000/B0000000/', 'x'.repeat(24)),
+    'a GitHub token': fake('gh', 'p_', 'x'.repeat(36)),
+    'an AWS access key': fake('AK', 'IA', 'X'.repeat(16)),
+    'a Google API key': fake('AI', 'za', 'x'.repeat(35)),
+    'a Telegram bot token': FAKE_BOT,
+    'a JWT (for example an n8n API key)': fake('ey', 'J', 'x'.repeat(12), '.', 'ey', 'J', 'x'.repeat(12), '.', 'x'.repeat(12)),
+    'a private key': fake('-----BEGIN RSA ', 'PRIVATE KEY-----'),
   }
   for (const [what, text] of Object.entries(samples)) assert.equal(findSecretInText(`value: ${text}`), what, what)
 })

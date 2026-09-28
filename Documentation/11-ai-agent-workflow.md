@@ -13,10 +13,12 @@ through the **official n8n instance-level MCP**. The entry-point skill is
    and anything published is "prod". Never edit a published workflow's live behavior without
    the owner's OK ([07-self-hosted-environments.md](07-self-hosted-environments.md)).
 3. **Is there a spec?** (`documentation/spec/NN-<slug>.md`, the short template is enough). No spec
-   means you write one with the owner first ([02-how-i-work.md](02-how-i-work.md)). "It's small"
-   is not an exception. Three filled-in fields beat a chat transcript.
+   means you write one with the owner first ([02-how-i-work.md](02-how-i-work.md)). A **small job**
+   (under ~10 nodes, one workflow, no writes to a client system) needs only three lines: Trigger,
+   Result, On failure. Three lines beat a chat transcript.
 4. **Sized and decided?** New project or a big feature: run `n8n-project-sizing` (estimate nodes,
-   then ask the owner: one workflow or several). Don't build until the owner answers.
+   then ask the owner: one workflow or several). Don't build until the owner answers. Small jobs
+   skip this.
 5. **Search before building:** `search_workflows` for existing workflows and sub-workflows
    (project slug tag, `subworkflow` tag).
 
@@ -86,7 +88,7 @@ more.
 | Workspace rules | `CLAUDE.md` → `AGENTS.md` | `AGENTS.md` (§0 checklist is mandatory) |
 | Project rules | `n8n workflows/<slug>/AGENTS.md` | same |
 | Skills | `.claude/skills` → `Skills/` | `.agents/skills` → `Skills/` |
-| Session start | **Hook** injects the protocol + project list (`scripts/hooks/session-start.mjs`) | the checklist in AGENTS.md |
+| Session start | **Hook** adds a pointer to AGENTS.md, three reminders, the project list with statuses, and `AGENTS.local.md` (`scripts/hooks/session-start.mjs`). AGENTS.md stays the only full copy of the rules | the checklist in AGENTS.md |
 | Before n8n write/run MCP calls | **Hook** adds a rule reminder (`scripts/hooks/n8n-guard.mjs`), and forces a permission prompt for publish / unpublish / archive / production runs / Data Table deletes | the checklist in AGENTS.md |
 | End of a turn | **Hook** (`scripts/hooks/export-check.mjs`): if a workflow was created or updated but no export JSON / CHANGELOG was written, it sends the agent back once to export or say why not | the Finish item in AGENTS.md §0 |
 

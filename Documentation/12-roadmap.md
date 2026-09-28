@@ -148,7 +148,7 @@ matter once there's a team or client-facing reporting.
   against the live MCP tool list and flags mismatches, plus a reminder to re-check vendored skills
   against their upstream sources.
 
-### D2. Lightweight mode for small jobs (P3)
+### D2. Lightweight mode for small jobs (P3) — done 2026-09-29, see Done
 
 - **Problem:** a 5-node job still goes through the full spec → sizing → sections → export → docs
   process.
@@ -168,6 +168,7 @@ matter once there's a team or client-facing reporting.
 
 | Date | Feature |
 |---|---|
+| 2026-09-29 | **Leaner agent rules + small-job path (D2).** AGENTS.md is the only full copy of the rules; the SessionStart hook now adds a pointer, three reminders and the project list with statuses instead of a second 8-point protocol (~70% less injected rule text). Small jobs (under ~10 nodes, one workflow, no client-system writes) skip the sizing question and use a 3-line spec. |
 | 2026-09-29 | **One sanitizer for everyone.** `app/src/lib/sanitize-core.mjs` is the single workflow sanitizer + secret scanner, used by Import, auto-export, restore, commits, and `scripts/export-workflow.mjs` (which the `n8n-workflow-export` skill now runs instead of sanitizing by hand). 14 tests (`npm test`, in CI). The Stop hook counts an exporter run as export + CHANGELOG. |
 | 2026-09-29 | **Restore to n8n (A4).** Per-workflow button on the project page: updates the workflow with the same id or creates it (and writes the new id into the file), never publishes, extra typed confirmation when the target is published, credential names listed, secret check, CHANGELOG line. |
 | 2026-09-29 | **macOS + Linux.** `new-project`, `init-project-repo` and `link-skills` are Node scripts (`scripts/*.mjs`; the `.ps1` files are Windows wrappers); the app calls them with Node. `scripts/control-center.mjs` installs the Control Center as a launchd agent (macOS) or systemd user service (Linux), with a safe `update` + rollback. CI runs the scripts on Ubuntu, macOS and Windows. In-app Restart/Update stays Windows-only. |

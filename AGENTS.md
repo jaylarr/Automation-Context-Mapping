@@ -24,11 +24,13 @@ Do these in order before your first action. "It's a quick change" is not an exce
       read it earlier in the session doesn't count.
 - [ ] **Size:** new project (or a feature adding ~10+ nodes)? Load `n8n-project-sizing`: estimate
       the node count, then **ask the owner** whether to build one workflow or several. No building
-      until the owner answers.
+      until the owner answers. **Small job** (under ~10 nodes, one workflow, no writes to a client
+      system): skip the sizing question and use the 3-line spec below.
 - [ ] **Sections:** building a new workflow (or adding nodes)? Load `n8n-workflow-sections` and
       plan the sticky-note sections **before** writing any SDK code.
 - [ ] **Spec:** the workflow has a spec in `documentation/spec/` (the short template is fine). No
-      spec? Write it with the owner before building.
+      spec? Write it with the owner before building. Small job: three lines are enough (**Trigger**,
+      **Result**, **On failure**), agreed in chat and saved as the spec.
 - [ ] **Instance:** before any n8n MCP call that writes or runs something, confirm which instance
       you're connected to (dev, never prod by accident). Single instance: a **published** workflow
       is prod, so ask before updating it ([07](Documentation/07-self-hosted-environments.md)).
@@ -36,8 +38,9 @@ Do these in order before your first action. "It's a quick change" is not an exce
       the same change, and committed in the project's own private repo once the owner OKs it.
       Report what's pending on the owner's side.
 
-Claude Code also gets these injected automatically by hooks (`.claude/settings.json`). Codex and
-other agents must follow them from this file.
+This file is the **only** full copy of these rules. Claude Code's hooks (`.claude/settings.json`)
+add just-in-time reminders at the risky moments (session start, n8n write/publish calls, end of a
+turn); Codex and other agents follow this file.
 
 ## 1. Workspace map
 
