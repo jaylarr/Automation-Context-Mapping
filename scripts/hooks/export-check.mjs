@@ -66,6 +66,8 @@ process.stdin.on('end', () => {
       }
       const target = String(input.file_path || input.path || '')
       const command = String(input.command || '')
+      // scripts/export-workflow.mjs writes both the JSON and the CHANGELOG line
+      if (/export-workflow\.mjs/.test(command) && !/--dry-run/.test(command)) wroteExport = wroteChangelog = true
       if (EXPORT_FILE.test(target) || /workflows[\\/]\d{2}-[^\s"']+\.json/i.test(command)) wroteExport = true
       if (CHANGELOG.test(target) || /CHANGELOG\.md/i.test(command)) wroteChangelog = true
     }

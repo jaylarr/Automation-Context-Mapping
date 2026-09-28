@@ -20,14 +20,15 @@ upgraded, or misconfigured. Every shipped workflow lives in git as an **importab
 ## How to export
 
 ### Option A: via agent + MCP (preferred)
-Use the **`n8n-workflow-export`** skill. It fetches the workflow with `get_workflow_details`,
-sanitizes it, writes the file, and drafts the CHANGELOG entry.
+Use the **`n8n-workflow-export`** skill. It saves `get_workflow_details` to a `.raw.json` file and
+runs `node scripts/export-workflow.mjs`, the same sanitizer the Control Center's Import uses
+(`app/src/lib/sanitize-core.mjs`, covered by `npm test`). Or click **Import** on the Workflows page.
 
 ### Option B: manually from the n8n UI
 1. Open the workflow → `…` menu → **Download**.
 2. Save as `<slug>.raw.json` in the project's `workflows/` folder (`*.raw.json` is gitignored).
-3. Ask the agent to sanitize it into `NN-<slug>.json` (the `n8n-workflow-export` skill works on
-   local files too), or sanitize it by hand using the rules below.
+3. Run `node scripts/export-workflow.mjs --project <slug> --raw "n8n workflows/<slug>/workflows/<slug>.raw.json"`
+   (or ask the agent). By hand only as a last resort, using the rules below.
 
 ## Sanitizing rules
 

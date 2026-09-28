@@ -5,7 +5,7 @@ import { api, listWorkflows } from './n8n'
 import { transliterate } from './transliterate'
 import { PROJECTS_DIR } from './paths'
 import { SLUG_RE, listProjects } from './projects'
-import { SECRET_PATTERNS } from './leak-scan'
+import { fingerprint as coreFingerprint, findHardcodedSecret as coreFindSecret, sanitizeWorkflow as coreSanitize } from './sanitize-core.mjs'
 import { appendChangelog, localDate } from './changelog'
 
 /**
@@ -55,75 +55,12 @@ export type WorkflowRow = {
 
 // ---------------------------------------------------------------- sanitize & compare
 
-/** Keeps what's needed to import the workflow; drops instance state and test data. */
+// One implementation for the app and scripts/export-workflow.mjs (agents): see sanitize-core.mjs.
 export function sanitizeWorkflow(w: N8nWorkflowFull): Record<string, unknown> {
-  const out: Record<string, unknown> = { id: w.id, name: w.name }
-  if (w.description) out.description = w.description
-  out.settings = w.settings ?? {}
-  out.tags = (w.tags ?? []).map((t) => ({ name: t.name }))
-  out.nodes = w.nodes
-  out.connections = w.connections
-  if (Array.isArray(w.nodeGroups) && w.nodeGroups.length) out.nodeGroups = w.nodeGroups
-  // Removed on purpose: pinData (often real client data), meta.instanceId, active, versionId,
-  // activeVersionId, activeVersion, shared, createdAt, updatedAt, triggerCount, isArchived, staticData.
-  return out
+  return coreSanitize(w)
 }
-
-function stable(v: unknown): string {
-  if (Array.isArray(v)) return `[${v.map(stable).join(',')}]`
-  if (v && typeof v === 'object')
-    return `{${Object.keys(v as object)
-      .sort()
-      .map((k) => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`)
-      .join(',')}}`
-  return JSON.stringify(v)
-}
-
-/** Only the parts that define the workflow's behavior and layout. */
-function fingerprint(w: Record<string, unknown>): string {
-  return stable({ name: w.name, nodes: w.nodes, connections: w.connections, settings: w.settings ?? {} })
-}
-
-// ---------------------------------------------------------------- secret scan
-
-const SECRET_FIELD = /^(api[_-]?key|apikey|access[_-]?token|token|secret|client[_-]?secret|password|passwd|authorization)$/i
-
-/** Returns "<node>: <what>" if a node has a secret typed directly into a parameter. */
-export function findHardcodedSecret(w: { nodes: N8nNode[] }): string | null {
-  const walk = (v: unknown, key: string | null): string | null => {
-    if (typeof v === 'string') {
-      if (v.startsWith('=')) return null // expressions are fine (values come from elsewhere)
-      for (const [re, what] of SECRET_PATTERNS) if (re.test(v)) return what
-      if (key && SECRET_FIELD.test(key) && v.length >= 12 && !/\s/.test(v)) return `a value in "${key}"`
-      return null
-    }
-    if (Array.isArray(v)) {
-      for (const x of v) {
-        // header/query lists look like [{ name: 'Authorization', value: '...' }]
-        if (x && typeof x === 'object' && 'name' in x && 'value' in x) {
-          const r = walk((x as { value: unknown }).value, String((x as { name: unknown }).name))
-          if (r) return r
-        } else {
-          const r = walk(x, null)
-          if (r) return r
-        }
-      }
-      return null
-    }
-    if (v && typeof v === 'object') {
-      for (const [k, x] of Object.entries(v)) {
-        const r = walk(x, k)
-        if (r) return r
-      }
-    }
-    return null
-  }
-  for (const n of w.nodes) {
-    const hit = walk(n.parameters ?? {}, null)
-    if (hit) return `${n.name}: ${hit}`
-  }
-  return null
-}
+export const findHardcodedSecret = (w: { nodes: N8nNode[] }): string | null => coreFindSecret(w)
+const fingerprint = coreFingerprint
 
 // ---------------------------------------------------------------- repo index
 

@@ -24,41 +24,45 @@ procedure.
 
 ## Procedure
 
-1. **Identify the project and file.** Which project folder (`n8n workflows/<slug>/`)? Read its
+1. **Identify the project.** Which project folder (`n8n workflows/<slug>/`)? Read its
    `AGENTS.md` and `README.md` workflows table.
-   - Existing workflow: reuse its file name/number.
-   - New workflow: next free number (numbers are never reused, so check `workflows/_archive/`
-     too). Slug = the n8n name without the `[project]` prefix, kebab-cased.
-2. **Get the JSON.**
-   - From n8n: `get_workflow_details({ workflowId })`. Take the workflow object (name, nodes,
-     connections, settings, and the rest).
-   - From a file: read `workflows/<slug>.raw.json` (gitignored).
-3. **Sanitize** (only these changes):
+2. **Get the JSON into a raw file.**
+   - From n8n: `get_workflow_details({ workflowId })`, then write the result as-is to
+     `n8n workflows/<slug>/workflows/<name>.raw.json` (gitignored). The `{ workflow: {…} }` shape is fine.
+   - From a UI download: save it as `workflows/<name>.raw.json`.
+3. **Run the shared exporter** (same rules as the Control Center's Import, one implementation in
+   `app/src/lib/sanitize-core.mjs`, covered by tests):
+
+   ```bash
+   node scripts/export-workflow.mjs --project <slug> --raw "n8n workflows/<slug>/workflows/<name>.raw.json" --changelog "<what changed and why>"
+   ```
+
+   It sanitizes, scans for secrets, checks every connection names an existing node, picks the file
+   (the one already holding this workflow id, else the next free number, archive included), writes
+   pretty JSON, adds the CHANGELOG line under [Unreleased], deletes the raw file, and prints a JSON
+   summary (file, action, credentials). Add `--dry-run` to preview. It never commits.
+   - **Exit code 2** = a secret is typed into a node, or a connection points at a missing node.
+     Nothing was written. Go back to Non-negotiable 1 (or fix the wiring), then run it again.
+   - `"action": "unchanged"` = the saved file already matches; nothing to do.
+
+   What the exporter keeps and removes (for reference; don't do it by hand):
 
    | Field | Action |
    |---|---|
-   | `pinData` | delete |
-   | `meta.instanceId` (and `meta` if it becomes empty, but keep `meta.templateCredsSetupCompleted` if present) | delete |
-   | `active`, `versionId`, `activeVersionId`, `shared`, `createdAt`, `updatedAt`, `triggerCount`, `isArchived` | delete |
-   | `staticData` | delete unless the workflow relies on seeded state (ask) |
-   | `nodes[].credentials` | **keep**: `{ id, name }` references only |
-   | `id`, `name`, `nodes`, `connections`, `settings`, `tags`, `description` | keep |
+   | `pinData`, `meta`, `staticData` | removed |
+   | `active`, `versionId`, `activeVersionId`, `shared`, `createdAt`, `updatedAt`, `triggerCount`, `isArchived` | removed |
+   | `nodes[].credentials` | **kept**: `{ id, name }` references only |
+   | `id`, `name`, `description`, `settings`, `tags` (names), `nodes`, `connections`, `nodeGroups` | kept |
 
-4. **Secret scan** the sanitized JSON before writing. Look for `sk-`, `Bearer `, `api_key`,
-   `apikey`, `password`, `secret`, `token` with literal values (not `{{ }}` expressions, and not
-   inside `credentials`), and long base64/hex strings in header or query parameters. Any hit
-   means going back to Non-negotiable 1.
-5. **Write** pretty-printed JSON (2-space indent, UTF-8, trailing newline) to
-   `workflows/NN-<slug>.json`. Delete the `.raw.json` source if one was used.
-6. **Verify importability:** the file parses as JSON, and has `nodes` (array), `connections`
-   (object), and `name`. Every connection source and target names an existing node.
-7. **Update docs in the same change:**
-   - `documentation/CHANGELOG.md` → an entry under `[Unreleased]` (Added / Changed / Fixed).
+   **No Node available?** Only then sanitize by hand with the table above and scan for the formats
+   in `sanitize-core.mjs` (`SECRET_PATTERNS`).
+4. **Update the rest of the docs in the same change:**
+   - `documentation/CHANGELOG.md`: the exporter added a line; move or reword it (Added / Fixed) if needed.
    - Project `README.md` workflows table (new workflow → new row).
    - Project `AGENTS.md` → the workflow ID for dev/prod.
    - The workflow's spec, if behavior changed. **No spec yet?** Write the *Quick spec* block
      (`Documentation/templates/workflow-spec.md`) from the workflow itself and mark it `draft`.
-8. **Generate the doc tables from the JSON** (don't make the owner type them). Replace only the
+5. **Generate the doc tables from the JSON** (don't make the owner type them). Replace only the
    rows for this workflow, and leave prose written by hand alone:
    - `documentation/architecture.md` → workflow list: name, trigger type, sub-workflows it
      calls (`executeWorkflow` nodes), systems touched (node types / credential types), Data Tables used.
@@ -66,10 +70,10 @@ procedure.
      and **Accounts and access** (one row per credential *name*; owner = `TODO` if unknown).
    - Replace leftover template placeholders (`{{…}}`, `e.g. …` example rows) that the JSON can
      answer. List the ones it can't as "pending on the owner's side".
-9. **Standards check** (report, don't fix silently): does the workflow have section stickies
+6. **Standards check** (report, don't fix silently): does the workflow have section stickies
    (`n8n-workflow-sections`), an error workflow in `settings.errorWorkflow` if it's published,
    and credential names that follow `Documentation/03-naming-conventions.md`? Flag each miss.
-10. **Report** the file written, the fields stripped, any credential references (by name) the
+7. **Report** the file written, the fields stripped, any credential references (by name) the
     importer will need to re-bind, the standards-check results, and a suggested commit message:
     `<project-slug>: <what changed>`. Projects are versioned in their **own private repo**
     (`n8n workflows/<slug>/.git`, see `Documentation/05-export-and-versioning.md`). **Don't commit**
