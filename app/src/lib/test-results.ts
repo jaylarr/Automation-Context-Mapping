@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { MAX_FILE_BYTES, MAX_FILES_PER_UPLOAD, projectDir, safeName, uniqueName } from './brief'
 import { isInside } from './paths'
-import { findSecretInText } from './secrets'
+import { findSecretInText } from './leak-scan'
 
 /**
  * Test results: "n8n workflows/<slug>/test-results/<run>/" holds one test run each: result.md

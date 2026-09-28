@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { DOCS_DIR, PROJECTS_DIR, SLUG_RE, isInside } from './paths'
-import { findSecretInText } from './secrets'
+import { findSecretInText } from './leak-scan'
 
 /**
  * The client brief: "n8n workflows/<slug>/client-brief/" holds what the client asked for, in their

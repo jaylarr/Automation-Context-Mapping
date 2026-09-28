@@ -5,6 +5,8 @@
 !**/.env.*.example
 *.pem
 *.key
+# Broad on purpose: never give a source file "secret" in its name, or it silently stays out of git
+# (CI builds a clean checkout to catch that).
 *secret*
 !**/*secret*.md
 credentials*.json

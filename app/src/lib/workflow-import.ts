@@ -5,7 +5,7 @@ import { api, listWorkflows } from './n8n'
 import { transliterate } from './transliterate'
 import { PROJECTS_DIR } from './paths'
 import { SLUG_RE, listProjects } from './projects'
-import { SECRET_PATTERNS } from './secrets'
+import { SECRET_PATTERNS } from './leak-scan'
 
 /**
  * Import workflows from n8n into project folders as clean, importable JSON backups.
