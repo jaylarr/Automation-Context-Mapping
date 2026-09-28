@@ -56,10 +56,24 @@ procedure.
    - `documentation/CHANGELOG.md` → an entry under `[Unreleased]` (Added / Changed / Fixed).
    - Project `README.md` workflows table (new workflow → new row).
    - Project `AGENTS.md` → the workflow ID for dev/prod.
-   - The workflow's spec, if behavior changed.
-8. **Report** the file written, the fields stripped, any credential references (by name) the
-   importer will need to re-bind, and a suggested commit message:
-   `<project-slug>: <what changed>`. **Don't commit** unless the owner asks.
+   - The workflow's spec, if behavior changed. **No spec yet?** Write the *Quick spec* block
+     (`Documentation/templates/workflow-spec.md`) from the workflow itself and mark it `draft`.
+8. **Generate the doc tables from the JSON** (don't make the owner type them). Replace only the
+   rows for this workflow, and leave prose written by hand alone:
+   - `documentation/architecture.md` → workflow list: name, trigger type, sub-workflows it
+     calls (`executeWorkflow` nodes), systems touched (node types / credential types), Data Tables used.
+   - `documentation/handover-sop.md` → **How it starts** (one row per trigger, in plain language)
+     and **Accounts and access** (one row per credential *name*; owner = `TODO` if unknown).
+   - Replace leftover template placeholders (`{{…}}`, `e.g. …` example rows) that the JSON can
+     answer. List the ones it can't as "pending on the owner's side".
+9. **Standards check** (report, don't fix silently): does the workflow have section stickies
+   (`n8n-workflow-sections`), an error workflow in `settings.errorWorkflow` if it's published,
+   and credential names that follow `Documentation/03-naming-conventions.md`? Flag each miss.
+10. **Report** the file written, the fields stripped, any credential references (by name) the
+    importer will need to re-bind, the standards-check results, and a suggested commit message:
+    `<project-slug>: <what changed>`. Projects are versioned in their **own private repo**
+    (`n8n workflows/<slug>/.git`, see `Documentation/05-export-and-versioning.md`). **Don't commit**
+    unless the owner asks.
 
 ## Anti-patterns
 

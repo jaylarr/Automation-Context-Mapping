@@ -17,7 +17,7 @@ validate_workflow  →  get_workflow_details (check connections)  →  user wire
    Validation misses dropped wires, Merge input off-by-one errors, and error outputs that were never wired.
 3. **Credentials:** open every credentialed node and confirm the **right** credential (dev vs prod,
    client A vs B) is selected.
-4. **Test with pinned data:** `prepare_test_pin_data` + `test_workflow` (triggers, credentialed nodes, and
+4. **Test with pinned data:** `prepare_workflow_pin_data` + `test_workflow` (triggers, credentialed nodes, and
    HTTP nodes get pinned. **Everything else runs for real**: Code, Data Tables, sub-workflow calls).
    **Ask before running** if anything unpinned has side effects.
 5. **UAT:** the client runs real-world scenarios in dev, or in prod with a kill switch.

@@ -4,8 +4,11 @@
 upgraded, or misconfigured. Every shipped workflow lives in git as an **importable JSON** file.
 
 > **Projects are not in this (public) workspace repo.** `n8n workflows/<project>/` is gitignored so
-> client work stays private. Version each project in its own **private** repo (run `git init`
-> inside the project folder) or another private backup. The git rules below apply to that repo.
+> client work stays private. Each project has its **own private repo** at
+> `n8n workflows/<project>/.git`. `scripts/new-project.ps1` creates it, and
+> `scripts/init-project-repo.ps1 -Name <slug>` adds one to an existing project. The git rules
+> below apply to that repo. A remote is optional and must be **private** (per client, so it can be
+> handed over). Release tags are plain `v1.1.0`, since the repo is already per project.
 
 ## What an exported workflow file must be
 
@@ -65,7 +68,7 @@ and **semantic versioning per project**:
   `acme-lead-intake: add retry + 429 handling to enrichment`. Workspace-level changes use
   `workspace:`, `docs:`, or `skills:` as the prefix.
 - **One logical change per commit.** Workflow JSON + CHANGELOG + affected docs go in together.
-- **Release tags** when a version goes to prod: `git tag acme-lead-intake/v1.1.0`.
+- **Release tags** when a version goes to prod: `git tag v1.1.0` (in the project repo).
 - **Branches** (optional for solo work): `<project-slug>/<short-change>` for bigger changes.
 - Never commit: `.env`, raw exports, real client data, secrets. `.gitignore` covers the common
   cases, but it isn't a guarantee. Look at `git diff --staged` before committing.

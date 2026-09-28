@@ -11,9 +11,16 @@ load the **`n8n-self-hosting`** skill.
 | **dev** | Building and testing | Test credentials / sandbox accounts. Break things freely |
 | **prod** | Client workflows running for real | Only tested, exported, committed workflows. Changes are imported from the repo, not hand-edited |
 
-- **Minimum:** one dev instance for building and one prod instance for running. If you only have
-  one instance, keep dev work in a separate n8n folder or project, use dev credentials, and
-  **never** activate an untested workflow.
+- **Ideal:** one dev instance for building and one prod instance for running.
+- **Single instance (dev = prod)**, the current setup until a VPS exists. The rule that replaces
+  "never build in prod":
+  - **Draft (unpublished) = dev.** Agents may create and update drafts in the project's n8n folder.
+  - **Published = prod.** Changing a published workflow changes live behavior, so an
+    `update_workflow` on a published workflow needs the owner's OK first. Safer: build the change
+    as a draft copy (`[slug] … (draft)`), test it, then swap with the owner's OK.
+  - Use **test credentials / test chats / test sheets** for drafts wherever the service allows it.
+  - **Never** publish an untested workflow, and every published workflow has an error workflow set.
+  - Record the instance in the project `AGENTS.md` as `dev+prod (single instance)`.
 - **Per-client instances** (client pays or owns the server): recorded in that project's AGENTS.md.
 
 `TODO(owner)`: list your instances here.
@@ -54,6 +61,7 @@ load the **`n8n-self-hosting`** skill.
 - The official instance-level MCP is enabled per instance (Settings → MCP). Record which instance
   the agent's MCP connection points to in the project AGENTS.md.
 - **Before any write via MCP, confirm which instance you're connected to.** Building in prod by
-  accident is the #1 environment mistake.
+  accident is the #1 environment mistake. On a single instance, the check is instead "is this
+  workflow published?" (`get_workflow_details` → `active`). If it is, ask before updating it.
 - Workflows created in the UI may have MCP access **off** by default. Toggle it per workflow if the
   agent needs to see it.

@@ -13,12 +13,23 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "mcp__.*__(create_workflow_from_code|update_workflow|publish_workflow|unpublish_workflow|archive_workflow|test_workflow|execute_workflow)",
+        "matcher": "mcp__.*__(create_workflow_from_code|update_workflow|publish_workflow|unpublish_workflow|archive_workflow|restore_workflow_version|test_workflow|execute_workflow|create_data_table|add_data_table_column|add_data_table_rows|rename_data_table|rename_data_table_column|delete_data_table_column)",
         "hooks": [
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/n8n-guard.mjs\"",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/export-check.mjs\"",
+            "timeout": 15
           }
         ]
       }

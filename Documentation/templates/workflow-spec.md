@@ -7,6 +7,20 @@
 | **Status** | draft / approved / built / live |
 | **Approved by client** | name, date |
 
+## Quick spec (the minimum: fill this before building)
+
+Five lines are enough to start. Fill in the full sections below before go-live.
+
+| | |
+|---|---|
+| **Trigger** | what starts it (webhook / schedule + cron / app event / sub-workflow) |
+| **Input** | what arrives (one line, or a sample in `assets/samples/`) |
+| **Result** | what exists or is sent afterwards (the success criterion) |
+| **On failure** | who hears about it and how (error workflow → …) |
+| **Out of scope** | what it deliberately does NOT do |
+
+---
+
 ## Purpose
 
 <!-- What it does and WHY it exists (the manual process it replaces, the pain it removes). -->

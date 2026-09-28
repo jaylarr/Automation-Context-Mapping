@@ -4,8 +4,14 @@ Which skill to load for which task. Each skill is `Skills/<name>/SKILL.md`. Agen
 folder as `.agents/skills/` and `.claude/skills/` (junctions created by `scripts/link-skills.ps1`).
 How the system works: [Documentation/10-skills-system.md](../Documentation/10-skills-system.md).
 
-**Rule of thumb:** load more skills rather than fewer. Even a 3-node webhook flow touches node
-configuration, expressions, error handling, and the lifecycle.
+**Rule of thumb:** load the router plus the **2–4 skills that match the current step**, and
+re-load one at the moment of decision. Even a 3-node webhook flow touches node configuration,
+expressions, error handling and the lifecycle, but not all at once. Preloading the whole index
+crowds the spec and project `AGENTS.md` out of context.
+
+**Name clashes:** if a global skill (`~/.claude/skills`) has the same name as or overlaps a skill
+here, the one in this folder wins. The czlonkowski pack's `using-n8n-mcp-skills` router targets the
+*community* n8n-mcp and must not be used in this workspace.
 
 ## Start here
 

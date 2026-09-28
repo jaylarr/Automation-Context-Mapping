@@ -25,10 +25,14 @@ Do these in order before your first action. "It's a quick change" is not an exce
       until the owner answers.
 - [ ] **Sections:** building a new workflow (or adding nodes)? Load `n8n-workflow-sections` and
       plan the sticky-note sections **before** writing any SDK code.
+- [ ] **Spec:** the workflow has a spec in `documentation/spec/` (the short template is fine). No
+      spec? Write it with the owner before building.
 - [ ] **Instance:** before any n8n MCP call that writes or runs something, confirm which instance
-      you're connected to (dev, never prod by accident).
+      you're connected to (dev, never prod by accident). Single instance: a **published** workflow
+      is prod, so ask before updating it ([07](Documentation/07-self-hosted-environments.md)).
 - [ ] **Finish:** kept changes are exported (`n8n-workflow-export`), with CHANGELOG and docs updated in
-      the same change. Report what's pending on the owner's side.
+      the same change, and committed in the project's own private repo once the owner OKs it.
+      Report what's pending on the owner's side.
 
 Claude Code also gets these injected automatically by hooks (`.claude/settings.json`). Codex and
 other agents must follow them from this file.
@@ -105,7 +109,7 @@ Full rules: [03-naming-conventions.md](Documentation/03-naming-conventions.md) Â
 
 - **n8n:** self-hosted. Each project records its instance(s) (dev/prod URL, n8n version) in its own
   `AGENTS.md`. Never assume which instance you're connected to. Check first.
-- **MCP:** the official n8n instance-level MCP (`get_sdk_reference`, `search_nodes`,
+- **MCP:** the official n8n instance-level MCP (`get_workflow_sdk_reference`, `search_nodes`,
   `get_node_types`, `validate_workflow`, `create_workflow_from_code`, `update_workflow`, â€¦).
   Tool names drift between versions, so trust the live tool list.
 - **OS:** Windows (PowerShell). Paths contain spaces (`n8n workflows/`), so always quote them.

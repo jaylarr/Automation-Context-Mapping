@@ -71,6 +71,7 @@ if ($DryRun) {
   $files.GetEnumerator() | ForEach-Object { Write-Host "[DryRun] Would write: $($_.Value)  (from templates/$($_.Key))" }
   if ($NoWebsite) { Write-Host "[DryRun] Would remove: website\" }
   Write-Host "[DryRun] Would add a row to: $registry"
+  Write-Host "[DryRun] Would git init a private repo in: $dest"
   return
 }
 
@@ -91,12 +92,15 @@ foreach ($entry in $files.GetEnumerator()) {
 # 3. Registry row (only when creating inside the real projects root)
 if ((Resolve-Path $ProjectsRoot).Path -eq (Resolve-Path (Join-Path $repo 'n8n workflows')).Path) {
   if (-not (Test-Path $registry)) {
-    $header = "# Automation Projects — Registry (local only, gitignored)`n`n| Project | Client | Status | Started | Purpose |`n|---|---|---|---|---|"
+    $header = "# Automation Projects - Registry (local only, gitignored)`n`n| Project | Client | Status | Started | Purpose |`n|---|---|---|---|---|"
     [System.IO.File]::WriteAllText($registry, "$header`n", (New-Object System.Text.UTF8Encoding $false))
   }
   $row = "| [$Name]($Name/README.md) | $Client | ``discovery`` | $today | $Purpose |"
   Add-Content -Path $registry -Value $row -Encoding UTF8
 }
 
+# 4. Own private git repo (the workspace repo is public and ignores project folders)
+& (Join-Path $PSScriptRoot 'init-project-repo.ps1') -Name $Name -ProjectsRoot $ProjectsRoot
+
 Write-Host "`nCreated $dest"
-Write-Host "Next: fill in AGENTS.md (instances, credentials), then write specs in documentation\spec\."
+Write-Host "Next: fill in AGENTS.md (instances, credentials), then write the Quick spec in documentation\spec\."

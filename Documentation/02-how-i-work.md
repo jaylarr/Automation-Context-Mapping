@@ -68,7 +68,7 @@ and decisions exist, and every workflow has a spec.
 
 - Import the exported JSON into **prod**, bind the prod credentials, and set the error workflow.
 - Activate during a window when you can watch the first executions.
-- Tag the release in git: `<project-slug>/v1.0.0`.
+- Tag the release in the project's private repo: `v1.0.0`.
 
 **Exit gate:** the first real executions succeeded and were checked by hand.
 
