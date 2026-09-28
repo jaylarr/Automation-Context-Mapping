@@ -12,6 +12,9 @@ export const NEW_PROJECT_SCRIPT = path.join(WORKSPACE_ROOT, 'scripts', 'new-proj
 
 export const DATABASE_PATH = path.resolve(/* turbopackIgnore: true */ process.env.DATABASE_PATH || path.join(/* turbopackIgnore: true */ process.cwd(), 'data', 'control-center.db'))
 
+/** Project slugs: kebab-case (folder names under "n8n workflows/"). */
+export const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
+
 /** True when `target` is inside `root` (prevents path traversal). */
 export function isInside(root: string, target: string): boolean {
   const rel = path.relative(root, target)

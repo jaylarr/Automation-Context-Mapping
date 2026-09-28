@@ -85,6 +85,25 @@ export function NewProjectForm({ initialSlug = '' }: { initialSlug?: string }) {
         <label htmlFor="purpose">One-line purpose</label>
         <input id="purpose" name="purpose" className="input" placeholder="Qualify inbound leads and push them to HubSpot" value={purpose} onChange={(e) => setPurpose(e.target.value)} maxLength={200} />
       </div>
+      <div className="field">
+        <label htmlFor="brief">Client brief (optional)</label>
+        <textarea
+          id="brief"
+          name="brief"
+          className="textarea"
+          rows={8}
+          placeholder="Paste what the client asked for: their email, message, or call notes, as they wrote it."
+        />
+        <span className="hint">
+          Saved to <code>client-brief/brief.md</code>, which agents read before anything else. You can edit it later on the project page. No passwords or
+          API keys.
+        </span>
+      </div>
+      <div className="field">
+        <label htmlFor="files">Files from the client (optional)</label>
+        <input id="files" name="files" type="file" multiple className="input" style={{ paddingTop: '0.4rem' }} />
+        <span className="hint">Emails, PDFs, screenshots, example sheets. Up to 25 MB each, saved to <code>client-brief/files/</code>.</span>
+      </div>
       <label className="check">
         <input type="checkbox" name="website" defaultChecked /> Include a <code>website/</code> folder
       </label>

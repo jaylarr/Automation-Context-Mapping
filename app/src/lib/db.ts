@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import fs from 'node:fs'
 import path from 'node:path'
 import { DATABASE_PATH } from './paths'
+import { normText } from './search'
 
 /**
  * Local SQLite database (no cloud). Holds logs, settings and cached n8n data only.
@@ -155,4 +156,6 @@ export const db: Database.Database = g.__ccDb ?? (g.__ccDb = open())
 
 // SQLite's lower()/LIKE only fold ASCII, so "übersetzer" wouldn't find "Übersetzer". Registered on
 // every load (not in open()) so a connection reused across hot reloads also gets it.
+// unorm: lowercase + separators collapsed to one space (see lib/search.ts), for "test project" ≈ "test-project".
+db.function('unorm', { deterministic: true }, (s: unknown) => (s == null ? null : normText(String(s))))
 db.function('ulower', { deterministic: true }, (s: unknown) => (s == null ? null : String(s).toLowerCase()))

@@ -61,6 +61,7 @@ $files = [ordered]@{
   'CHANGELOG.md'      = 'documentation\CHANGELOG.md'
   'decision-log.md'   = 'documentation\decisions.md'
   'handover-sop.md'   = 'documentation\handover-sop.md'
+  'client-brief.md'   = 'client-brief\brief.md'
 }
 
 Write-Host "Project : $DisplayName ($Name)"
@@ -84,6 +85,10 @@ if ($NoWebsite) { Remove-Item (Join-Path $dest 'website') -Recurse -Force }
 foreach ($entry in $files.GetEnumerator()) {
   $content = Get-Content -Raw -Encoding UTF8 (Join-Path $templates $entry.Key)
   foreach ($t in $tokens.GetEnumerator()) { $content = $content.Replace($t.Key, $t.Value) }
+  # No website/: drop the README's "Website / app" section (up to the next heading or end of file)
+  if ($NoWebsite -and $entry.Key -eq 'project-README.md') {
+    $content = [regex]::Replace($content, '(?ms)^## Website / app\s*$.*?(?=^## |\z)', '')
+  }
   $out = Join-Path $dest $entry.Value
   New-Item -ItemType Directory -Force -Path (Split-Path -Parent $out) | Out-Null
   [System.IO.File]::WriteAllText($out, $content, (New-Object System.Text.UTF8Encoding $false))
@@ -103,4 +108,5 @@ if ((Resolve-Path $ProjectsRoot).Path -eq (Resolve-Path (Join-Path $repo 'n8n wo
 & (Join-Path $PSScriptRoot 'init-project-repo.ps1') -Name $Name -ProjectsRoot $ProjectsRoot
 
 Write-Host "`nCreated $dest"
-Write-Host "Next: fill in AGENTS.md (instances, credentials), then write the Quick spec in documentation\spec\."
+Write-Host "Next: paste the client's brief into client-brief\brief.md (files into client-brief\files\),"
+Write-Host "      fill in AGENTS.md (instances, credentials), then write the Quick spec in documentation\spec\."

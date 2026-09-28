@@ -11,6 +11,8 @@ import { addInstance, clearInstanceKey, connectedInstances, getInstance, listIns
 import { INSTANCE_COOKIE } from '@/lib/instance-filter'
 import { cookies } from 'next/headers'
 import { STATUSES, type Status, createProject, listProjects, setProjectStatus } from '@/lib/projects'
+import { MAX_BRIEF_CHARS, MAX_FILE_BYTES, briefTemplate, deleteBriefFile, readBrief, saveBrief, saveBriefFiles, withAskedText } from '@/lib/brief'
+import { addToTestRun, createTestRun, deleteTestFile } from '@/lib/test-results'
 import { saveSettings } from '@/lib/settings'
 import { setEnvValues } from '@/lib/envfile'
 import { type MaintenanceAction, launchMaintenance } from '@/lib/maintenance'
@@ -25,6 +27,10 @@ export async function createProjectAction(_prev: ActionState, form: FormData): P
   const client = String(form.get('client') ?? '').trim()
   const purpose = String(form.get('purpose') ?? '').trim()
   const website = form.get('website') === 'on'
+  const briefText = String(form.get('brief') ?? '')
+  const files = form.getAll('files').filter((f): f is File => f instanceof File && f.size > 0)
+  if (briefText.length > MAX_BRIEF_CHARS) return { ok: false, message: 'The brief is too long.' }
+  if (files.some((f) => f.size > MAX_FILE_BYTES)) return { ok: false, message: `Each file must be under ${MAX_FILE_BYTES / 1024 / 1024} MB.` }
   try {
     await createProject({ slug, client, purpose, website })
   } catch (e) {
@@ -33,8 +39,59 @@ export async function createProjectAction(_prev: ActionState, form: FormData): P
     return { ok: false, message }
   }
   logActivity({ level: 'success', action: 'project.create', message: `Created project ${slug}`, project: slug, meta: { client, website } })
+
+  // The project exists now: brief problems are logged, and the project page shows what's missing.
+  try {
+    if (briefText.trim()) {
+      const { source } = readBrief(slug)
+      const { warning } = saveBrief(slug, withAskedText(source ?? briefTemplate({ name: slug, client }), briefText))
+      if (warning) logActivity({ level: 'warn', action: 'brief.save', message: `Brief of ${slug}: ${warning}`, project: slug })
+    }
+    if (files.length) {
+      const saved = await saveBriefFiles(slug, files)
+      logActivity({ level: 'info', action: 'brief.files', message: `Added ${saved.length} client file(s) to ${slug}`, project: slug, meta: { files: saved } })
+    }
+  } catch (e) {
+    logActivity({ level: 'error', action: 'brief.save', message: `Brief of ${slug} not saved: ${e instanceof Error ? e.message : e}`, project: slug })
+  }
   revalidatePath('/', 'layout')
   redirect(`/projects/${slug}`)
+}
+
+export async function saveBriefAction(slug: string, source: string): Promise<ActionState> {
+  try {
+    const { warning } = saveBrief(slug, source)
+    logActivity({ level: warning ? 'warn' : 'info', action: 'brief.save', message: `Client brief of ${slug} saved`, project: slug })
+    revalidatePath(`/projects/${slug}`)
+    revalidatePath('/projects')
+    return warning ? { ok: false, message: warning } : { ok: true, message: 'Brief saved.' }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not save the brief.' }
+  }
+}
+
+export async function uploadBriefFilesAction(slug: string, form: FormData): Promise<ActionState> {
+  const files = form.getAll('files').filter((f): f is File => f instanceof File)
+  try {
+    const saved = await saveBriefFiles(slug, files)
+    if (!saved.length) return { ok: false, message: 'No files to add.' }
+    logActivity({ level: 'info', action: 'brief.files', message: `Added ${saved.length} client file(s) to ${slug}`, project: slug, meta: { files: saved } })
+    revalidatePath(`/projects/${slug}`)
+    return { ok: true, message: `Added ${saved.join(', ')}.` }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not add the files.' }
+  }
+}
+
+export async function deleteBriefFileAction(slug: string, name: string): Promise<ActionState> {
+  try {
+    deleteBriefFile(slug, name)
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not remove the file.' }
+  }
+  logActivity({ level: 'info', action: 'brief.files', message: `Removed client file "${name}" from ${slug}`, project: slug })
+  revalidatePath(`/projects/${slug}`)
+  return { ok: true, message: `Removed ${name}.` }
 }
 
 export async function setStatusAction(slug: string, status: string): Promise<ActionState> {
@@ -394,4 +451,46 @@ export async function createProjectAndImportAction(
   return result.ok
     ? { ok: true, message: `Project "${slug}" created and the workflow imported.`, result }
     : { ok: false, message: `Project "${slug}" was created, but the import failed: ${result.message}`, result }
+}
+
+export async function createTestRunAction(slug: string, form: FormData): Promise<ActionState> {
+  const files = form.getAll('files').filter((f): f is File => f instanceof File)
+  const outcome = String(form.get('outcome') ?? '')
+  try {
+    const { id, warning } = await createTestRun(slug, {
+      title: String(form.get('title') ?? ''),
+      workflow: String(form.get('workflow') ?? ''),
+      notes: String(form.get('notes') ?? ''),
+      outcome: outcome === 'pass' || outcome === 'fail' ? outcome : 'unknown',
+      files,
+    })
+    logActivity({ level: warning ? 'warn' : 'info', action: 'tests.add', message: `Test result ${id} added to ${slug}`, project: slug })
+    revalidatePath(`/projects/${slug}`)
+    return warning ? { ok: false, message: warning } : { ok: true, message: `Saved to test-results/${id}/.` }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not save the test result.' }
+  }
+}
+
+export async function addToTestRunAction(slug: string, run: string, form: FormData): Promise<ActionState> {
+  const files = form.getAll('files').filter((f): f is File => f instanceof File)
+  try {
+    const { saved, warning } = await addToTestRun(slug, run, { notes: String(form.get('notes') ?? ''), files })
+    logActivity({ level: warning ? 'warn' : 'info', action: 'tests.add', message: `Added to test result ${run} of ${slug}`, project: slug, meta: { files: saved } })
+    revalidatePath(`/projects/${slug}`)
+    return warning ? { ok: false, message: warning } : { ok: true, message: saved.length ? `Added ${saved.join(', ')}.` : 'Note added.' }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not add to the test result.' }
+  }
+}
+
+export async function deleteTestFileAction(slug: string, run: string, name: string): Promise<ActionState> {
+  try {
+    deleteTestFile(slug, run, name)
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not remove the file.' }
+  }
+  logActivity({ level: 'info', action: 'tests.files', message: `Removed "${name}" from test result ${run} of ${slug}`, project: slug })
+  revalidatePath(`/projects/${slug}`)
+  return { ok: true, message: `Removed ${name}.` }
 }

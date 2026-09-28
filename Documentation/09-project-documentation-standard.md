@@ -7,6 +7,7 @@ any project and find things in the same place.
 
 | File | Audience | Contents | Template |
 |---|---|---|---|
+| `client-brief/brief.md` (+ `files/`) | Us + agents | The client's request **in their own words**: what they asked for, today's process, the goal, systems, constraints, dated scope updates. **Written by the owner only** (Control Center or an editor). Agents read it first and never edit it | [client-brief.md](templates/client-brief.md) |
 | `README.md` | Anyone | What the project does, status, workflows table, how to run and test it, links | [project-README.md](templates/project-README.md) |
 | `AGENTS.md` | AI agents | Client, instances, credential names, workflow IDs, constraints, project-specific exceptions | [project-AGENTS.md](templates/project-AGENTS.md) |
 | `documentation/spec/NN-<slug>.md` | Us + client | One per workflow: trigger, inputs, outputs, logic, errors, test cases. **Written before building** | [workflow-spec.md](templates/workflow-spec.md) |
@@ -22,7 +23,8 @@ Optional: `documentation/meeting-notes/YYYY-MM-DD-<topic>.md`,
 
 | Event | Update |
 |---|---|
-| Project kickoff | README (status `discovery`), AGENTS.md, discovery notes |
+| Project kickoff | `client-brief/` (owner), README (status `discovery`), AGENTS.md, discovery notes |
+| Client changes the scope | A dated entry under "Updates from the client" in `client-brief/brief.md` (owner), then the affected specs |
 | Spec approved | `spec/NN-*.md` per workflow; README status `scoped` |
 | Architecture decided | `architecture.md`, `decisions.md` |
 | Any workflow change | Exported JSON + `CHANGELOG.md` + the affected spec (**same commit**) |

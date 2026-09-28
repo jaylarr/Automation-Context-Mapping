@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Keep the dev badge away from the sidebar's theme toggle (bottom-left).
   devIndicators: { position: 'bottom-right' },
+  // Client-brief uploads (PDFs, screenshots) go through Server Actions; the default cap is 1 MB.
+  experimental: { serverActions: { bodySizeLimit: '100mb' } },
 }
 
 export default nextConfig

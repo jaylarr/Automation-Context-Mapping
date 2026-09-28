@@ -19,6 +19,11 @@ and `Documentation/03-naming-conventions.md`.
    consistently.
 3. **Never invent client facts.** Instance URLs, credential names, and contacts that the owner hasn't
    given stay as `TODO`.
+4. **`client-brief/` belongs to the owner.** It holds the client's request in their own words. The
+   owner usually writes it in the Control Center (Projects → New project, or the project page).
+   If the owner gives you the brief in chat and asks you to save it, paste it into
+   `client-brief/brief.md` **as-is**, without rewriting or summarizing, and put files in
+   `client-brief/files/`. Never change it otherwise.
 
 ## Procedure
 
@@ -26,13 +31,15 @@ and `Documentation/03-naming-conventions.md`.
    - Client name and a one-line purpose
    - Proposed slug. Suggest one and confirm it
    - Does it need a `website/`? (default: keep the folder. Pass `-NoWebsite` if clearly not needed)
+   - The client's brief: their message, email, or call notes, plus any files. Optional now; it can
+     be added later in the Control Center
 2. **Check it doesn't exist:** list `n8n workflows/` and read `n8n workflows/REGISTRY.md` (local-only; may not exist yet).
 3. **Dry run first** and show the owner the output:
    ```powershell
    powershell -ExecutionPolicy Bypass -File scripts/new-project.ps1 -Name <slug> -Client "<Client>" -Purpose "<one line>" -DryRun
    ```
 4. **Create** by running the same command without `-DryRun`.
-5. **Fill in** the new `AGENTS.md` with whatever is known (instances, credential names,
+5. **Save the brief** if the owner gave one (non-negotiable 4). **Fill in** the new `AGENTS.md` with whatever is known (instances, credential names,
    constraints, alert destination). Leave unknowns as `TODO`.
 6. **Discovery:** if a client call is next, point the owner to
    `Documentation/templates/discovery-questions.md`, and offer to turn the answers into
@@ -43,7 +50,8 @@ and `Documentation/03-naming-conventions.md`.
 8. **Size before building:** once the brief/spec is clear, run the `n8n-project-sizing` skill.
    Estimate the node count and ask the owner whether to build one workflow or several. Don't build
    before the answer.
-9. **Report:** the created path, what's still `TODO`, and the next step (discovery, spec, or sizing).
+9. **Report:** the created path, what's still `TODO` (including an empty brief), and the next step
+   (discovery, spec, or sizing).
 
 ## Anti-patterns
 

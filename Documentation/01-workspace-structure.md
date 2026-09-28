@@ -27,6 +27,9 @@ Automation Context Mapping/                 ← MAIN FOLDER (git repo)
     └── <project-slug>/                     ← ONE folder per automation project
         ├── AGENTS.md                       ← project-specific agent context
         ├── README.md                       ← project front page
+        ├── client-brief/                   ← the client's request, written by the owner (agents: read-only)
+        │   ├── brief.md                    ← their words: what they asked for, today's process, goal
+        │   └── files/                      ← what they sent: emails, PDFs, screenshots, example sheets
         ├── workflows/                      ← importable n8n JSON only
         │   ├── 01-<workflow-slug>.json
         │   ├── 02-<workflow-slug>.json
@@ -38,6 +41,7 @@ Automation Context Mapping/                 ← MAIN FOLDER (git repo)
         │   ├── CHANGELOG.md
         │   ├── decisions.md
         │   └── handover-sop.md
+        ├── test-results/                   ← one folder per test run: result.md + screenshots/outputs
         └── assets/                         ← optional: diagrams, sample payloads (no real client PII)
 ```
 
@@ -46,6 +50,7 @@ Automation Context Mapping/                 ← MAIN FOLDER (git repo)
 | You have… | Put it in… |
 |---|---|
 | A rule that applies to every project | `Documentation/` (+ one line in root `AGENTS.md` if it's a hard rule) |
+| What the client asked for (their brief, emails, PDFs, screenshots) | `n8n workflows/<project>/client-brief/` (`brief.md` + `files/`). The owner writes it, in the Control Center or an editor. Agents read it and never edit it. Too sensitive for git? Put it in `files/private/` (gitignored) |
 | A fact about one project (client, instance URL, credentials used) | `n8n workflows/<project>/AGENTS.md` |
 | A workflow exported from n8n | `n8n workflows/<project>/workflows/NN-<slug>.json` |
 | A sub-workflow shared by **several projects** | The project that owns it, noted in the other projects' `architecture.md`. If it becomes truly generic, create a `n8n workflows/shared-utilities/` project |

@@ -2,12 +2,27 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { ArrowLeft, ArrowRight, FileJson, FileText } from 'lucide-react'
+import { ClientBrief } from '@/components/client-brief'
+import { CopyButton } from '@/components/copy-button'
 import { Markdown } from '@/components/markdown'
+import { TestResults } from '@/components/test-results'
 import { StatusSelect } from '@/components/status-select'
 import { EmptyState, PageHeader, ProjectStatusBadge, StatusBadge } from '@/components/ui'
+import { briefTemplate, readBrief } from '@/lib/brief'
 import { relativeTime } from '@/lib/format'
 import { listEvents, listExecutions } from '@/lib/logs'
+import { WORKSPACE_ROOT } from '@/lib/paths'
+import { listTestRuns } from '@/lib/test-results'
 import { STATUSES, getProject, readProjectDoc } from '@/lib/projects'
+
+/** What to paste into Claude Code / Codex so it starts on this project with full context. */
+function kickoffPrompt(slug: string): string {
+  return [
+    `Work on the automation project "${slug}" (n8n workflows/${slug}/).`,
+    `Read its AGENTS.md, then client-brief/ (brief.md and every file in files/), then README.md and documentation/.`,
+    `Then tell me the stage it's at and the next step, and wait for my OK before building anything.`,
+  ].join('\n')
+}
 
 export async function generateMetadata(props: PageProps<'/projects/[slug]'>): Promise<Metadata> {
   const { slug } = await props.params
@@ -24,8 +39,15 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
   const doc = readProjectDoc(slug, docPath)
   const execs = listExecutions({ project: slug, page: 1 }).rows.slice(0, 6)
   const events = listEvents({ project: slug, page: 1 }).rows.slice(0, 6)
+  const brief = readBrief(slug)
   const base = `/projects/${slug}`
   const prefix = `n8n workflows/${slug}/`
+  const runs = listTestRuns(slug).map((r) => ({
+    ...r,
+    source: undefined,
+    body: r.source !== null && <Markdown source={r.source} docId={`${prefix}test-results/${r.id}/result.md`} linkFor={(id) => `/docs?id=${encodeURIComponent(id)}`} />,
+  }))
+  const prompt = kickoffPrompt(slug)
 
   return (
     <>
@@ -42,6 +64,23 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
 
       <section className="grid grid-main-side">
         <div className="stack">
+          <ClientBrief
+            slug={slug}
+            state={brief.state}
+            source={brief.source}
+            template={briefTemplate({ name: project.name, client: project.client })}
+            files={brief.files}
+            updatedAt={brief.updatedAt}
+          >
+            {brief.source !== null && (
+              <Markdown
+                source={brief.source}
+                docId={`${prefix}client-brief/brief.md`}
+                linkFor={(id) => `/docs?id=${encodeURIComponent(id)}`}
+              />
+            )}
+          </ClientBrief>
+
           <div className="card">
             <div className="card-head">
               <h2>Workflows</h2>
@@ -90,6 +129,8 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
             )}
           </div>
 
+          <TestResults slug={slug} runs={runs} workflows={project.workflows.map((w) => w.file.replace(/\.json$/, ''))} />
+
           <div className="card">
             <div className="card-head">
               <h2 className="truncate">{docPath}</h2>
@@ -112,6 +153,30 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
         </div>
 
         <aside className="stack">
+          <div className="card">
+            <div className="card-head">
+              <h2>Start an agent</h2>
+              <CopyButton text={prompt} label="Copy prompt" />
+            </div>
+            <p className="small muted">
+              Open Claude Code or Codex in the workspace folder (not the project folder, so the workspace rules load), then paste:
+            </p>
+            <div className="prose">
+              <pre className="small" style={{ whiteSpace: 'pre-wrap' }}>{prompt}</pre>
+            </div>
+            <div className="row small faint" style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+              <span className="mono truncate" title={WORKSPACE_ROOT}>
+                {WORKSPACE_ROOT}
+              </span>
+              <CopyButton text={WORKSPACE_ROOT} label="Copy path" />
+            </div>
+            {brief.state !== 'filled' && (
+              <p className="small" style={{ color: 'var(--warn)' }}>
+                The client brief is empty. Write it first, so the agent has the client&rsquo;s request.
+              </p>
+            )}
+          </div>
+
           <div className="card">
             <StatusSelect slug={slug} status={project.status} statuses={STATUSES} />
             <hr className="divider" />

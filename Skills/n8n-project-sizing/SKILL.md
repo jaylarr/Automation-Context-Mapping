@@ -39,7 +39,7 @@ maintain and reuse), and only the owner knows the client, the budget, and how th
 
 ## Procedure
 
-1. **Read what exists:** the brief, `documentation/discovery.md`, specs in `documentation/spec/`,
+1. **Read what exists:** the client brief (`client-brief/brief.md` + `files/`), `documentation/discovery.md`, specs in `documentation/spec/`,
    and the project `AGENTS.md`. If the brief is too thin to estimate (trigger, systems, or outputs
    unknown), ask those questions first.
 2. **Break the project into steps**, the same way a person would do the job: receive → check →

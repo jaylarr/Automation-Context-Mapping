@@ -258,7 +258,9 @@ Report event node with `level: error` and a message like
 2. **Open the Control Center app** from the Start menu or taskbar.
 3. **Look at the Overview:** any red? Check **Recent failures**.
 4. **Building something new?** Ask Claude or Codex. They follow your handbook automatically.
-5. **New client?** Go to **Projects → New project**.
+5. **New client?** Go to **Projects → New project** and paste what they asked for (plus their files)
+   into **Client brief**. Then copy the prompt from **Start an agent** on the project page into
+   Claude or Codex. The agent reads the brief first, so you don't have to explain it again.
 6. **App acting weird?** Go to **Settings → Restart**.
 7. **A feature was added?** Go to **Settings → Update & rebuild**.
 

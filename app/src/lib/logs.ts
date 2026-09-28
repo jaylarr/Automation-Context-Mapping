@@ -1,5 +1,6 @@
 import { db } from './db'
 import { NOT_EXCLUDED_OR_SNOOZED_SQL, NOT_EXCLUDED_SQL } from './workflow-prefs'
+import { searchTerms } from './search'
 
 export type Level = 'info' | 'success' | 'warn' | 'error'
 export const LEVELS: Level[] = ['info', 'success', 'warn', 'error']
@@ -89,10 +90,13 @@ function buildWhere(
     params.push(f.instance)
   }
   if (f.q) {
-    // Case-insensitive for any language (ulower, see db.ts); % and _ typed by the user match literally.
-    const needle = `%${f.q.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`
-    clauses.push('(' + cols.search.map((c) => `ulower(${c}) LIKE ? ESCAPE '\\'`).join(' OR ') + ')')
-    for (let i = 0; i < cols.search.length; i++) params.push(needle)
+    // Every typed word must match some column; case and separators are ignored (unorm, see db.ts and
+    // lib/search.ts), so "test project" finds "test-project". % and _ typed by the user match literally.
+    for (const term of searchTerms(f.q)) {
+      const needle = `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+      clauses.push('(' + cols.search.map((c) => `unorm(${c}) LIKE ? ESCAPE '\\'`).join(' OR ') + ')')
+      for (let i = 0; i < cols.search.length; i++) params.push(needle)
+    }
   }
   return { where: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', params }
 }

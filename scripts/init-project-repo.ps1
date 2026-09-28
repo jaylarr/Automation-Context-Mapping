@@ -36,6 +36,9 @@ if (-not (Test-Path $ignore)) {
 credentials*.json
 !**/credentials*.example.json
 
+# Client files too sensitive for git (customer records, contracts): keep them out of the repo
+client-brief/files/private/
+
 # Raw n8n downloads (sanitize into NN-<slug>.json first)
 *.raw.json
 

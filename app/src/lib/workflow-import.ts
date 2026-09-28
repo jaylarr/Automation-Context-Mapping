@@ -5,6 +5,7 @@ import { api, listWorkflows } from './n8n'
 import { transliterate } from './transliterate'
 import { PROJECTS_DIR } from './paths'
 import { SLUG_RE, listProjects } from './projects'
+import { SECRET_PATTERNS } from './secrets'
 
 /**
  * Import workflows from n8n into project folders as clean, importable JSON backups.
@@ -84,13 +85,6 @@ function fingerprint(w: Record<string, unknown>): string {
 
 // ---------------------------------------------------------------- secret scan
 
-const SECRET_PATTERNS: [RegExp, string][] = [
-  [/\bsk-[A-Za-z0-9_-]{20,}/, 'an API key (sk-…)'],
-  [/\bBearer\s+[A-Za-z0-9._~+/-]{20,}/i, 'a bearer token'],
-  [/\bxox[abpr]-[A-Za-z0-9-]{10,}/, 'a Slack token'],
-  [/\bgh[pousr]_[A-Za-z0-9]{30,}/, 'a GitHub token'],
-  [/\bAKIA[0-9A-Z]{16}\b/, 'an AWS access key'],
-]
 const SECRET_FIELD = /^(api[_-]?key|apikey|access[_-]?token|token|secret|client[_-]?secret|password|passwd|authorization)$/i
 
 /** Returns "<node>: <what>" if a node has a secret typed directly into a parameter. */

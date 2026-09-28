@@ -12,6 +12,7 @@ import { NewProjectDialog } from './new-project-dialog'
 import { WorkflowSettingsDialog } from './workflow-settings-dialog'
 import { PublishDialog } from './publish-dialog'
 import type { WorkflowPrefs } from '@/lib/workflow-prefs'
+import { matchesQuery } from '@/lib/search'
 
 const MODE_TAG: Record<WorkflowPrefs['logMode'], string | null> = { all: null, errors: 'errors only', success: 'success only', off: 'not tracked' }
 
@@ -95,7 +96,7 @@ export function WorkflowImporter({
     } else if (filter === 'unassigned' ? !(r.status === 'new' && !r.project) : filter !== 'all' && r.status !== filter) return false
     if (published !== 'any' && r.active !== (published === 'published')) return false
     if (imported !== 'any' && Boolean(r.file) !== (imported === 'imported')) return false
-    return !q || r.name.toLowerCase().includes(q.toLowerCase())
+    return matchesQuery(r.name, q)
   }).sort(SORTS[sort])
   const filtersOn = published !== 'any' || imported !== 'any' || sort !== 'edited-desc'
 

@@ -41,7 +41,8 @@ context, the workspace standards, the "is this still needed?" review, and the ap
 
 1. **Scope:** whole project (default) or named workflows. Read the project's `AGENTS.md` first
    (instances, workflow IDs, credentials, constraints).
-2. **Read the project documents:** `README.md` (workflows table, status), `documentation/spec/*`,
+2. **Read the project documents:** `client-brief/` (what the client actually asked for; the
+   top reference for "does it do what they wanted"), `README.md` (workflows table, status), `documentation/spec/*`,
    `architecture.md`, `decisions.md`, `CHANGELOG.md`, `discovery.md`, `handover-sop.md`, if they
    exist. Note what each workflow is **supposed** to do. Missing docs are findings themselves (D-items).
 3. **Read the repo exports** in `workflows/` (and note `_archive/`).

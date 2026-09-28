@@ -43,11 +43,17 @@ Put them in the workflow's spec (`documentation/spec/NN-<slug>.md`) and tick the
   `new-lead.missing-email.json`). The same files double as pin data.
 - Never use real customer data in the repo. Mask it if you copy a real payload's shape.
 
+## Test results (evidence)
+
+Save every meaningful test run in the project's `test-results/YYYY-MM-DD-<nn>-<short-name>/`:
+a `result.md` (date, workflow, execution ID, cases, PASS/FAIL) plus any screenshots, output
+files, or captured texts. Format: `test-results/README.md`. Mask PII, never store secrets.
+
 ## QA sign-off (copy into the spec)
 
 - [ ] validate_workflow clean; connections verified
 - [ ] Credentials verified per node (correct env and client)
-- [ ] All test cases above pass
+- [ ] All test cases above pass (evidence in `test-results/`)
 - [ ] Error workflow fires and alerts correctly
 - [ ] Idempotency confirmed
 - [ ] Client UAT sign-off (name + date): ______

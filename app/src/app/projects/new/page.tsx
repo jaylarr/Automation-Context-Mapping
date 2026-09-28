@@ -23,8 +23,8 @@ export default async function NewProjectPage(props: PageProps<'/projects/new'>) 
       <div className="stack" style={{ maxWidth: '48rem' }}>
         <NewProjectForm initialSlug={slug} />
         <Notice>
-          After creating: fill in the project’s <code>AGENTS.md</code> (instances, credential names, alert destination), then write a
-          spec per workflow before building.
+          After creating: the project page has a prompt to copy into Claude Code or Codex. The agent reads the brief, fills in the project&rsquo;s{' '}
+          <code>AGENTS.md</code> with you, and writes a spec per workflow before building.
         </Notice>
       </div>
     </>

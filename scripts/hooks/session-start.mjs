@@ -32,7 +32,7 @@ const context = `# Automation workspace: session protocol (injected by .claude/s
 
 You are in an n8n automation workspace. "The owner" means the person running it (see AGENTS.local.md if present). Follow this on EVERY task, even small ones:
 
-1. The rules live in AGENTS.md (already loaded via CLAUDE.md). The project-level AGENTS.md in "n8n workflows/<project>/" adds to and overrides them. Read it before touching that project.
+1. The rules live in AGENTS.md (already loaded via CLAUDE.md). The project-level AGENTS.md in "n8n workflows/<project>/" adds to and overrides them. Read it before touching that project, then its client-brief/ (brief.md + files/: the client's request in their own words, READ-ONLY for agents). Then tell the owner the project's stage and the next step.
 2. Before ANY n8n action (designing, configuring a node, writing an expression or Code, wiring errors, building an agent, calling an n8n MCP tool), invoke the matching skill. Start with \`using-n8n-skills-official\` (the router). Routing table: Skills/INDEX.md. Prefer \`*-official\` skills over similarly named global ones.
 3. Non-negotiables: secrets only in n8n credentials. validate_workflow → get_workflow_details (check connections) → test → publish, and publish ONLY with the owner's explicit OK. Ask before any test or execution with real side effects.
 4. After a workflow change is kept: export it with the \`n8n-workflow-export\` skill (sanitized JSON in workflows/NN-<slug>.json) and update the project's CHANGELOG and docs in the same change.

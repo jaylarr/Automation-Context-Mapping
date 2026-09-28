@@ -2,7 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { NEW_PROJECT_SCRIPT, PROJECTS_DIR, REGISTRY_FILE, WORKSPACE_ROOT } from './paths'
+import { NEW_PROJECT_SCRIPT, PROJECTS_DIR, REGISTRY_FILE, SLUG_RE, WORKSPACE_ROOT } from './paths'
+import { type BriefState, briefState } from './brief'
+
+export { SLUG_RE }
 
 /**
  * Projects are read straight from "n8n workflows/<slug>/". The folders are the source of truth;
@@ -20,8 +23,6 @@ export const STATUSES = [
   'archived',
 ] as const
 export type Status = (typeof STATUSES)[number]
-
-export const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
 export type WorkflowSummary = {
   file: string
@@ -44,6 +45,7 @@ export type Project = {
   started: string
   hasWebsite: boolean
   specCount: number
+  brief: BriefState
   workflows: WorkflowSummary[]
   docs: { title: string; path: string }[]
   updatedAt: string
@@ -167,6 +169,7 @@ function readProject(slug: string): Project | null {
     started: tableValue(readme, 'Started'),
     hasWebsite: fs.existsSync(path.join(dir, 'website')),
     specCount,
+    brief: briefState(dir),
     workflows,
     docs,
     updatedAt: updatedAt.toISOString(),

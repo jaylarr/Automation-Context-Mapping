@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { DOCS_DIR, SKILLS_DIR, WORKSPACE_ROOT, isInside } from './paths'
+import { matchesQuery, searchTerms } from './search'
 
 /** Read-only browser over the workspace's markdown: root files, Documentation/, and Skills/. */
 
@@ -74,13 +75,13 @@ export function readDoc(id: string): { id: string; title: string; body: string }
 export type SearchHit = { id: string; title: string; group: string; snippet: string }
 
 export function searchDocs(q: string, limit = 30): SearchHit[] {
-  const needle = q.trim().toLowerCase()
-  if (needle.length < 2) return []
+  const terms = searchTerms(q)
+  if (terms.join('').length < 2) return []
   const hits: SearchHit[] = []
   for (const d of listDocs()) {
     const text = safeRead(path.join(WORKSPACE_ROOT, d.id))
-    const i = text.toLowerCase().indexOf(needle)
-    if (i === -1 && !d.title.toLowerCase().includes(needle)) continue
+    if (!matchesQuery(`${d.title} ${d.id} ${text}`, terms)) continue
+    const i = text.toLowerCase().indexOf(terms[0])
     const at = Math.max(0, i)
     const snippet = text
       .slice(Math.max(0, at - 60), at + 140)

@@ -45,7 +45,8 @@ export function Markdown({ source, docId, linkFor }: { source: string; docId: st
           },
         }}
       >
-        {source}
+        {/* HTML comments are template hints for whoever edits the file; raw HTML isn't rendered, so drop them. */}
+        {source.replace(/<!--[\s\S]*?-->/g, '')}
       </ReactMarkdown>
     </div>
   )

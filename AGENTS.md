@@ -15,8 +15,10 @@ AI agent (Codex, Cursor, Claude Code, or others) that works here. A project fold
 
 Do these in order before your first action. "It's a quick change" is not an exception.
 
-- [ ] **Scope:** identify the project (`n8n workflows/<slug>/`) and read its `AGENTS.md`. If there's
-      no project yet and the task is client work, use the `new-automation-project` skill.
+- [ ] **Scope:** identify the project (`n8n workflows/<slug>/`), read its `AGENTS.md`, then its
+      `client-brief/` (the client's own request: `brief.md` + `files/`). The brief is **read-only**
+      for agents. If there's no project yet and the task is client work, use the
+      `new-automation-project` skill.
 - [ ] **Skill:** open [Skills/INDEX.md](Skills/INDEX.md) and load `using-n8n-skills-official`, plus
       every skill whose trigger matches the task. Re-load a skill at the moment of decision; having
       read it earlier in the session doesn't count.
@@ -46,7 +48,8 @@ other agents must follow them from this file.
 | [`n8n workflows/`](n8n%20workflows/README.md) | One folder per **automation project**, plus a `_template/` to copy from |
 | `n8n workflows/<project>/workflows/` | Importable n8n workflow JSON (`01-<name>.json`, `02-<name>.json` …) |
 | `n8n workflows/<project>/website/` | Optional web app or site that belongs to the project |
-| `n8n workflows/<project>/documentation/` | That project's spec, architecture, changelog, decisions, and handover |
+| `n8n workflows/<project>/client-brief/` | What the client asked for, in their words (`brief.md` + `files/`). Written by the owner, often in the Control Center. Agents read it and never edit it |
+| `n8n workflows/<project>/documentation/` | That project's spec, architecture, changelog, decisions, and handover (agent-maintained) |
 | `scripts/` | Workspace helpers (`new-project.ps1`, `link-skills.ps1`) |
 | [`app/`](app/README.md) | **Control Center**: local Next.js + SQLite dashboard (projects, n8n execution logs, event inbox, docs). Reads the folders above; never the source of truth |
 | `.agents/skills` | A junction to `Skills/`, so Codex and Cursor auto-discover skills. Don't edit files through it |

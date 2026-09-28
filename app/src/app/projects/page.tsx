@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { FileJson, FolderKanban, Globe, Plus } from 'lucide-react'
+import { ClipboardList, FileJson, FolderKanban, Globe, Plus } from 'lucide-react'
 import { EmptyState, PageHeader, ProjectStatusBadge } from '@/components/ui'
 import { relativeTime } from '@/lib/format'
 import { STATUSES, listProjects } from '@/lib/projects'
@@ -75,6 +75,9 @@ export default async function ProjectsPage(props: PageProps<'/projects'>) {
                 <span className="row" style={{ gap: 'var(--s-4)' }}>
                   <span className="row" style={{ gap: 'var(--s-1)' }}>
                     <FileJson size={14} aria-hidden /> {p.workflows.length}
+                  </span>
+                  <span className="row" style={{ gap: 'var(--s-1)', color: p.brief === 'filled' ? undefined : 'var(--warn)' }}>
+                    <ClipboardList size={14} aria-hidden /> {p.brief === 'filled' ? 'brief' : 'no brief'}
                   </span>
                   {p.hasWebsite && (
                     <span className="row" style={{ gap: 'var(--s-1)' }}>
