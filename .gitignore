@@ -1,0 +1,47 @@
+# --- Secrets: never commit ---
+.env
+.env.*
+!.env.example
+!**/.env.*.example
+*.pem
+*.key
+*secret*
+!**/*secret*.md
+credentials*.json
+!**/credentials*.example.json
+
+# --- Agent skill junctions (recreate with scripts/link-skills.ps1) ---
+.agents/
+.claude/skills
+
+# --- Dependencies / builds (project websites) ---
+node_modules/
+dist/
+build/
+.next/
+.vercel/
+.turbo/
+coverage/
+
+# --- Local n8n data / exports that bypassed sanitizing ---
+.n8n/
+*.raw.json
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
+
+# --- Local-only: real projects and personal config (repo is public) ---
+# Only the project template and the explainer README are shared.
+n8n workflows/*
+!n8n workflows/_template/
+!n8n workflows/README.md
+# Project registry (client names, statuses) - created by scripts/new-project.ps1
+n8n workflows/REGISTRY.md
+# Personal overrides for agents: your name, credential names, instance URLs
+AGENTS.local.md

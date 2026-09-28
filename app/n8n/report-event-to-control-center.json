@@ -1,0 +1,175 @@
+{
+  "name": "[shared-utilities] Report event to Control Center",
+  "description": "Sends an event (level, message, project, workflow, data) to the local Control Center app's inbox. Call it from any workflow with Execute Workflow (waitForSubWorkflow off). Returns {ok, eventId} or {ok:false, error}; never throws.",
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "tags": [
+    {
+      "name": "notification"
+    },
+    {
+      "name": "subworkflow"
+    },
+    {
+      "name": "control-center"
+    }
+  ],
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "level"
+            },
+            {
+              "name": "message"
+            },
+            {
+              "name": "project"
+            },
+            {
+              "name": "workflow"
+            },
+            {
+              "name": "data",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "2ecdf8ac-3755-445b-97b2-3250532d3917",
+      "name": "Receive event",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3100/api/events",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  // \"info\" unless the caller says otherwise\n  level: $('Receive event').item.json.level || 'info',\n  message: $('Receive event').item.json.message,\n  // optional context; empty values are dropped by the app\n  project: $('Receive event').item.json.project || undefined,\n  workflow: $('Receive event').item.json.workflow || $workflow.name,\n  data: $('Receive event').item.json.data || undefined\n}) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "d0fc1bb2-9920-41a9-badb-23f71546d25d",
+      "name": "Send event to Control Center",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        96
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Control Center ingest"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "n8n runs in Docker on the same PC as the Control Center app, so it reaches the app via host.docker.internal (not ngrok). The x-ingest-token header comes from the Header Auth credential."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ok",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "event-id",
+              "name": "eventId",
+              "value": "={{ $json.id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fd0ef71c-93cd-45c0-8523-682621307b23",
+      "name": "Return success",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ok",
+              "name": "ok",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "error",
+              "name": "error",
+              "value": "={{ $json.error?.message ?? $json.message ?? 'Could not reach the Control Center' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5db3f0c9-915a-47f2-93a2-2c1dd4fa09ce",
+      "name": "Return failure",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        192
+      ]
+    }
+  ],
+  "connections": {
+    "Receive event": {
+      "main": [
+        [
+          {
+            "node": "Send event to Control Center",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send event to Control Center": {
+      "main": [
+        [
+          {
+            "node": "Return success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

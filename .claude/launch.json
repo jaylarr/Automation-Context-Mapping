@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "control-center",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "app"
+      ],
+      "port": 3100
+    },
+    {
+      "name": "control-center-3101",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "Set-Location app; npx next dev -H 127.0.0.1 -p 3101"
+      ],
+      "port": 3101
+    }
+  ]
+}

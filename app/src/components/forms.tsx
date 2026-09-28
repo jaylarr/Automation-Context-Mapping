@@ -1,0 +1,131 @@
+'use client'
+
+import { useActionState, useState } from 'react'
+import { Loader2 } from 'lucide-react'
+import { type ActionState, createProjectAction, saveSettingsAction } from '@/app/actions'
+import type { Settings } from '@/lib/settings'
+import { transliterate } from '@/lib/transliterate'
+
+function Result({ state }: { state: ActionState }) {
+  if (!state) return null
+  return (
+    <span className="small" role={state.ok ? 'status' : 'alert'} style={{ color: state.ok ? 'var(--text-2)' : 'var(--err)' }}>
+      {state.message}
+    </span>
+  )
+}
+
+function Submit({ pending, children, pendingLabel }: { pending: boolean; children: React.ReactNode; pendingLabel: string }) {
+  return (
+    <button type="submit" className="btn btn-primary" disabled={pending}>
+      {pending ? (
+        <>
+          <Loader2 aria-hidden style={{ animation: 'spin 0.9s linear infinite' }} />
+          {pendingLabel}
+        </>
+      ) : (
+        children
+      )}
+    </button>
+  )
+}
+
+const STOPWORDS = new Set(['a', 'an', 'and', 'the', 'of', 'for', 'to', 'in', 'on', 'with', 'from', 'into', 'by', 'them', 'their', 'our', 'we'])
+
+const toSlug = (s: string) =>
+  transliterate(s)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+
+export function NewProjectForm({ initialSlug = '' }: { initialSlug?: string }) {
+  const [state, action, pending] = useActionState(createProjectAction, null)
+  const [client, setClient] = useState('')
+  const [purpose, setPurpose] = useState('')
+  const [slug, setSlug] = useState(initialSlug)
+  const [touched, setTouched] = useState(Boolean(initialSlug))
+  const words = transliterate(purpose)
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w && !STOPWORDS.has(w))
+  const suggested = toSlug([client.split(/\s+/)[0] ?? '', ...words.slice(0, 3)].join(' '))
+  const value = touched ? slug : suggested
+  const valid = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(value) && value.length <= 40
+
+  return (
+    <form action={action} className="card" style={{ gap: 'var(--gap)' }}>
+      <div className="form-grid">
+        <div className="field">
+          <label htmlFor="client">Client</label>
+          <input id="client" name="client" className="input" placeholder="Acme Co" value={client} onChange={(e) => setClient(e.target.value)} required maxLength={120} />
+        </div>
+        <div className="field">
+          <label htmlFor="slug">Project slug</label>
+          <input
+            id="slug"
+            name="slug"
+            className="input mono"
+            placeholder="acme-lead-intake"
+            value={value}
+            onChange={(e) => {
+              setTouched(true)
+              setSlug(e.target.value)
+            }}
+            aria-invalid={value.length > 0 && !valid}
+            required
+            maxLength={40}
+          />
+          <span className="hint" style={value && !valid ? { color: 'var(--err)' } : undefined}>
+            {value && !valid ? 'Lowercase letters, digits and single hyphens only.' : '<client>-<purpose>, kebab-case. Used everywhere, so it can’t be renamed later.'}
+          </span>
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor="purpose">One-line purpose</label>
+        <input id="purpose" name="purpose" className="input" placeholder="Qualify inbound leads and push them to HubSpot" value={purpose} onChange={(e) => setPurpose(e.target.value)} maxLength={200} />
+      </div>
+      <label className="check">
+        <input type="checkbox" name="website" defaultChecked /> Include a <code>website/</code> folder
+      </label>
+      <hr className="divider" />
+      <div className="row">
+        <Submit pending={pending || !valid} pendingLabel="Creating…">
+          Create project
+        </Submit>
+        <Result state={state} />
+      </div>
+    </form>
+  )
+}
+
+export function SettingsForm({ settings }: { settings: Settings }) {
+  const [state, action, pending] = useActionState(saveSettingsAction, null)
+  return (
+    <form action={action} className="stack-sm" style={{ gap: 'var(--gap)' }}>
+      <div className="form-grid">
+        <div className="field">
+          <label htmlFor="syncIntervalMinutes">Auto-sync every (minutes)</label>
+          <input id="syncIntervalMinutes" name="syncIntervalMinutes" type="number" min={0} max={1440} className="input" defaultValue={settings.syncIntervalMinutes} />
+          <span className="hint">0 turns auto-sync off.</span>
+        </div>
+        <div className="field">
+          <label htmlFor="syncLookbackPages">Executions per sync (× 100)</label>
+          <input id="syncLookbackPages" name="syncLookbackPages" type="number" min={1} max={20} className="input" defaultValue={settings.syncLookbackPages} />
+          <span className="hint">How far back each sync reads.</span>
+        </div>
+        <div className="field">
+          <label htmlFor="retentionDays">Keep logs for (days)</label>
+          <input id="retentionDays" name="retentionDays" type="number" min={1} max={3650} className="input" defaultValue={settings.retentionDays} />
+          <span className="hint">Older rows are pruned after each sync.</span>
+        </div>
+      </div>
+      <div className="row">
+        <Submit pending={pending} pendingLabel="Saving…">
+          Save settings
+        </Submit>
+        <Result state={state} />
+      </div>
+    </form>
+  )
+}

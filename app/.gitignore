@@ -1,0 +1,13 @@
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+data/*.db
+data/*.db-*
+.env*.local
+.env
+.next-staging/
+.next-old/
+data/*.lock
+data/*.flag
+data/*.pending
