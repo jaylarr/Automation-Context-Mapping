@@ -1730,3 +1730,97 @@ label.option {
   background: var(--surface);
   animation: pulse 1.6s var(--ease) infinite;
 }
+
+/* ---------------------------------------------------------------- project cards (stretched link + gear menu) */
+.project-card {
+  position: relative;
+  transition: border-color 0.15s var(--ease), background 0.15s var(--ease), opacity 0.15s var(--ease);
+}
+
+.project-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.project-card-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.project-card[data-archived='dimmed'] {
+  opacity: 0.55;
+}
+
+.project-card[data-archived='dimmed']:hover,
+.project-card[data-archived='dimmed']:focus-within {
+  opacity: 1;
+}
+
+.card-menu {
+  position: relative;
+  z-index: 1;
+  flex: none;
+}
+
+.card-menu .btn-icon {
+  width: 2rem;
+  height: 2rem;
+  min-height: 0;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--s-1));
+  z-index: 20;
+  min-width: 11rem;
+  display: flex;
+  flex-direction: column;
+  padding: var(--s-1);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 0.25);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--t-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--surface-hover);
+}
+
+.menu-item-danger {
+  color: var(--err);
+}
+
+.btn-danger {
+  background: var(--err);
+  border-color: var(--err);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: var(--err);
+  opacity: 0.88;
+}

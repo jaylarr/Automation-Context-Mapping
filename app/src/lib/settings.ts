@@ -47,3 +47,9 @@ export function setMeta(key: string, value: string): void {
 export const env = {
   ingestToken: () => process.env.INGEST_TOKEN || '',
 }
+
+/** How the Projects grid shows archived projects: hidden behind a filter (default) or dimmed in place. */
+export type ArchivedDisplay = 'hidden' | 'dimmed'
+export function getArchivedDisplay(): ArchivedDisplay {
+  return getMeta('archivedDisplay') === 'dimmed' ? 'dimmed' : 'hidden'
+}

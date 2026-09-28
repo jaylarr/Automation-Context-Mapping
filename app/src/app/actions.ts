@@ -10,10 +10,11 @@ import { LOG_MODES, type PrefsInput, purgeNonMatching, saveWorkflowPrefs } from 
 import { addInstance, clearInstanceKey, connectedInstances, getInstance, listInstances, removeInstance, updateInstance } from '@/lib/instances'
 import { INSTANCE_COOKIE } from '@/lib/instance-filter'
 import { cookies } from 'next/headers'
-import { STATUSES, type Status, createProject, listProjects, setProjectStatus } from '@/lib/projects'
+import { STATUSES, type Status, createProject, deleteProjectFolder, listProjects, setProjectArchived, setProjectStatus, updateProjectInfo } from '@/lib/projects'
+import { db } from '@/lib/db'
 import { MAX_BRIEF_CHARS, MAX_FILE_BYTES, briefTemplate, deleteBriefFile, readBrief, saveBrief, saveBriefFiles, withAskedText } from '@/lib/brief'
 import { addToTestRun, createTestRun, deleteTestFile } from '@/lib/test-results'
-import { saveSettings } from '@/lib/settings'
+import { saveSettings, setMeta } from '@/lib/settings'
 import { setEnvValues } from '@/lib/envfile'
 import { type MaintenanceAction, launchMaintenance } from '@/lib/maintenance'
 import { type ImportResult, importWorkflow } from '@/lib/workflow-import'
@@ -104,6 +105,52 @@ export async function setStatusAction(slug: string, status: string): Promise<Act
   logActivity({ level: 'info', action: 'project.status', message: `Status of ${slug} changed to ${status}`, project: slug })
   revalidatePath('/', 'layout')
   return { ok: true, message: `Status set to ${status}.` }
+}
+
+export async function saveProjectInfoAction(slug: string, _prev: ActionState, form: FormData): Promise<ActionState> {
+  const field = (k: string) => String(form.get(k) ?? '')
+  try {
+    updateProjectInfo(slug, { name: field('name'), purpose: field('purpose'), client: field('client'), version: field('version'), started: field('started') })
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not save the project details.' }
+  }
+  logActivity({ level: 'info', action: 'project.info', message: `Details of ${slug} updated`, project: slug })
+  revalidatePath('/', 'layout')
+  return { ok: true, message: 'Saved to README.md.' }
+}
+
+export async function setArchivedAction(slug: string, archived: boolean): Promise<ActionState> {
+  try {
+    setProjectArchived(slug, archived)
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not change the archive state.' }
+  }
+  logActivity({ level: 'info', action: archived ? 'project.archive' : 'project.unarchive', message: `${archived ? 'Archived' : 'Restored'} project ${slug}`, project: slug })
+  revalidatePath('/', 'layout')
+  return { ok: true, message: archived ? 'Project archived.' : 'Project restored.' }
+}
+
+/** Deletes the project folder, its registry row, and its Control Center rows. n8n is not touched. */
+export async function deleteProjectAction(slug: string, confirmation: string): Promise<ActionState> {
+  if (confirmation !== 'confirm-delete') return { ok: false, message: 'Type confirm-delete to delete the project.' }
+  try {
+    deleteProjectFolder(slug)
+    db.transaction(() => {
+      for (const table of ['events', 'executions', 'activity'] as const) db.prepare(`DELETE FROM ${table} WHERE project = ?`).run(slug)
+    })()
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not delete the project.' }
+  }
+  logActivity({ level: 'warn', action: 'project.delete', message: `Deleted project ${slug} (folder and Control Center data)` })
+  // No revalidatePath here: the caller's card would unmount mid-transition. The client closes its dialog, then refreshes.
+  return { ok: true, message: `Project ${slug} deleted.` }
+}
+
+export async function setArchivedDisplayAction(value: string): Promise<ActionState> {
+  if (value !== 'hidden' && value !== 'dimmed') return { ok: false, message: 'Unknown option.' }
+  setMeta('archivedDisplay', value)
+  revalidatePath('/', 'layout')
+  return { ok: true, message: 'Saved.' }
 }
 
 // ------------------------------------------------------------------ n8n

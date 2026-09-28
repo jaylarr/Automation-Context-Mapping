@@ -6,6 +6,7 @@ import { setStatusAction } from '@/app/actions'
 export function StatusSelect({ slug, status, statuses }: { slug: string; status: string; statuses: readonly string[] }) {
   const [pending, start] = useTransition()
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
+  const [value, setValue] = useState(status)
 
   return (
     <div className="field">
@@ -13,13 +14,16 @@ export function StatusSelect({ slug, status, statuses }: { slug: string; status:
       <select
         id="project-status"
         className="select"
-        defaultValue={status}
+        value={value}
         disabled={pending}
         onChange={(e) => {
+          const prev = value
           const next = e.target.value
+          setValue(next)
           start(async () => {
             const r = await setStatusAction(slug, next)
             setMessage(r ? { ok: r.ok, text: r.message } : null)
+            if (!r?.ok) setValue(prev) // failed saves must not look saved
           })
         }}
       >

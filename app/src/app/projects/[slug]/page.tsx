@@ -7,6 +7,7 @@ import { CopyButton } from '@/components/copy-button'
 import { Markdown } from '@/components/markdown'
 import { TestResults } from '@/components/test-results'
 import { StatusSelect } from '@/components/status-select'
+import { ProjectInfoForm } from '@/components/project-info-form'
 import { EmptyState, PageHeader, ProjectStatusBadge, StatusBadge } from '@/components/ui'
 import { briefTemplate, readBrief } from '@/lib/brief'
 import { relativeTime } from '@/lib/format'
@@ -180,15 +181,14 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
           <div className="card">
             <StatusSelect slug={slug} status={project.status} statuses={STATUSES} />
             <hr className="divider" />
+            <ProjectInfoForm
+              slug={slug}
+              info={{ name: project.name, purpose: project.purpose, client: project.client, version: project.version, started: project.started }}
+            />
+            <hr className="divider" />
             <dl className="dl">
-              <dt>Client</dt>
-              <dd>{project.client || '—'}</dd>
               <dt>Slug</dt>
               <dd className="mono">{project.slug}</dd>
-              <dt>Version</dt>
-              <dd>{project.version || '—'}</dd>
-              <dt>Started</dt>
-              <dd>{project.started || '—'}</dd>
               <dt>Specs</dt>
               <dd>{project.specCount}</dd>
               <dt>Website</dt>

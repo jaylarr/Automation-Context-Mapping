@@ -22,6 +22,7 @@ done**.
 | 09 | [Project documentation standard](09-project-documentation-standard.md) | Writing or updating a project's docs |
 | 10 | [Skills system](10-skills-system.md) | Using, adding, updating, or writing skills |
 | 11 | [AI agent workflow](11-ai-agent-workflow.md) | An agent builds or edits workflows via the n8n MCP |
+| 12 | [Roadmap](12-roadmap.md) | Planning what to build next: features planned for the workspace and the Control Center |
 
 ## Templates
 

@@ -2,8 +2,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { NEW_PROJECT_SCRIPT, PROJECTS_DIR, REGISTRY_FILE, SLUG_RE, WORKSPACE_ROOT } from './paths'
+import { NEW_PROJECT_SCRIPT, PROJECTS_DIR, REGISTRY_FILE, SLUG_RE, WORKSPACE_ROOT, isInside } from './paths'
 import { type BriefState, briefState } from './brief'
+import { INFO_LIMITS } from './project-info'
 
 export { SLUG_RE }
 
@@ -49,7 +50,12 @@ export type Project = {
   workflows: WorkflowSummary[]
   docs: { title: string; path: string }[]
   updatedAt: string
+  /** Set by the `.archived` marker file. Archived projects still open and work normally. */
+  archived: boolean
 }
+
+/** Marker file in the project folder; its presence means "archived" (content: the ISO date). */
+const ARCHIVE_MARKER = '.archived'
 
 function readText(p: string): string | null {
   try {
@@ -59,12 +65,71 @@ function readText(p: string): string | null {
   }
 }
 
-/** Reads a `| **Label** | value |` row from the project README's info table. */
+/** Reads a `| **Label** | value |` (or plain `| Label | value |`) row from the project README's info table. */
 function tableValue(md: string, label: string): string {
   md = md.replace(/<!--[\s\S]*?-->/g, '')
-  const m = md.match(new RegExp(`\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*(.+?)\\s*\\|`, 'i'))
+  const m = md.match(new RegExp(`^\\|[ \\t]*(?:\\*\\*)?${label}(?:\\*\\*)?[ \\t]*\\|[ \\t]*(.+?)[ \\t]*\\|`, 'im'))
   if (!m) return ''
   return m[1].replace(/<!--.*?-->/g, '').replace(/`/g, '').trim()
+}
+
+/**
+ * The info rows the app reads and edits. The first label is the standard one (the template's);
+ * the others are older or hand-written variants that are still read, and renamed on save.
+ */
+const INFO_ROWS = {
+  client: { labels: ['Client'], code: false },
+  status: { labels: ['Status', 'Stage'], code: true },
+  version: { labels: ['Current version', 'Version'], code: false },
+  started: { labels: ['Started'], code: false },
+} as const
+type InfoKey = keyof typeof INFO_ROWS
+
+function infoValue(md: string, key: InfoKey): string {
+  for (const label of INFO_ROWS[key].labels) {
+    const v = tableValue(md, label)
+    if (v) return v
+  }
+  return ''
+}
+
+/** The README part before the first `## ` heading: title, purpose line, and the info table. */
+function head(md: string): string {
+  const i = md.search(/^## /m)
+  return i === -1 ? md : md.slice(0, i)
+}
+
+function readName(md: string): string {
+  return head(md).match(/^#\s+(.+)$/m)?.[1].trim() ?? ''
+}
+
+function readPurpose(md: string): string {
+  return head(md).match(/^>\s+(.+)$/m)?.[1].trim() ?? ''
+}
+
+/** One line, no table pipes: safe to put in a markdown table cell or heading. */
+function cell(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').replace(/`/g, '').trim()
+}
+
+/** Sets an info row, whatever label variant or bold style it uses. Adds the row if it's missing. */
+function setInfoRow(md: string, key: InfoKey, value: string): string {
+  const { labels, code } = INFO_ROWS[key]
+  const row = `| **${labels[0]}** | ${code ? `\`${value}\`` : value || '—'} |`
+  for (const label of labels) {
+    const re = new RegExp(`^\\|[ \\t]*(?:\\*\\*)?${label}(?:\\*\\*)?[ \\t]*\\|[^|\\n]*\\|[ \\t]*$`, 'im')
+    if (re.test(md)) return md.replace(re, () => row)
+  }
+  // Missing: add it after any existing info row, or start an info table under the title/purpose.
+  for (const k of Object.keys(INFO_ROWS) as InfoKey[]) {
+    for (const label of INFO_ROWS[k].labels) {
+      const re = new RegExp(`^\\|[ \\t]*(?:\\*\\*)?${label}(?:\\*\\*)?[ \\t]*\\|.*$`, 'im')
+      if (re.test(md)) return md.replace(re, (line) => `${line}\n${row}`)
+    }
+  }
+  const anchor = /^>\s+.+$/m.test(head(md)) ? /^>\s+.+$/m : /^#\s+.+$/m
+  if (!anchor.test(md)) return `| | |\n|---|---|\n${row}\n\n${md}`
+  return md.replace(anchor, (line) => `${line}\n\n| | |\n|---|---|\n${row}`)
 }
 
 function prettify(slug: string) {
@@ -123,9 +188,9 @@ function readProject(slug: string): Project | null {
   const readme = readText(path.join(dir, 'README.md'))
   if (readme === null) return null
 
-  const name = readme.match(/^#\s+(.+)$/m)?.[1].trim() || prettify(slug)
-  const purpose = readme.match(/^>\s+(.+)$/m)?.[1].trim() || ''
-  const statusRaw = tableValue(readme, 'Status').toLowerCase()
+  const name = readName(readme) || prettify(slug)
+  const purpose = readPurpose(readme)
+  const statusRaw = infoValue(readme, 'status').toLowerCase()
   const status = (STATUSES as readonly string[]).includes(statusRaw) ? (statusRaw as Status) : 'unknown'
 
   const wfDir = path.join(dir, 'workflows')
@@ -163,16 +228,17 @@ function readProject(slug: string): Project | null {
     slug,
     name,
     purpose,
-    client: tableValue(readme, 'Client'),
+    client: infoValue(readme, 'client'),
     status,
-    version: tableValue(readme, 'Current version'),
-    started: tableValue(readme, 'Started'),
+    version: infoValue(readme, 'version'),
+    started: infoValue(readme, 'started'),
     hasWebsite: fs.existsSync(path.join(dir, 'website')),
     specCount,
     brief: briefState(dir),
     workflows,
     docs,
     updatedAt: updatedAt.toISOString(),
+    archived: fs.existsSync(path.join(dir, ARCHIVE_MARKER)),
   }
 }
 
@@ -219,22 +285,100 @@ export function readProjectDoc(slug: string, rel: string): string | null {
   return readText(path.join(PROJECTS_DIR, slug, rel))
 }
 
-/** Updates the status in the project README and in the registry row. */
-export function setProjectStatus(slug: string, status: Status): void {
+/** The README facts editable from the app. Everything below the info table is left to agents. */
+export type ProjectInfo = {
+  name: string
+  purpose: string
+  client: string
+  status: Status
+  version: string
+  started: string
+}
+
+/**
+ * Updates the title, purpose line and info rows of the project README (and its registry row).
+ * Hand-written variants (`| Stage | … |`, labels without bold) are rewritten to the template format.
+ * Throws if the README doesn't read back with the new values, so a failed save is never reported as done.
+ */
+export function updateProjectInfo(slug: string, patch: Partial<ProjectInfo>): ProjectInfo {
   const p = getProject(slug)
   if (!p) throw new Error(`Unknown project: ${slug}`)
+  if (patch.status !== undefined && !(STATUSES as readonly string[]).includes(patch.status)) throw new Error('Unknown status.')
+  const clean = Object.fromEntries(Object.entries(patch).map(([k, v]) => [k, cell(String(v))])) as Partial<ProjectInfo>
+  for (const [k, max] of Object.entries(INFO_LIMITS))
+    if ((clean[k as keyof ProjectInfo] ?? '').length > max) throw new Error(`${k} is longer than ${max} characters.`)
+  if (clean.name !== undefined && !clean.name) throw new Error('The project name can’t be empty.')
+
   const readmePath = path.join(PROJECTS_DIR, slug, 'README.md')
-  const readme = fs.readFileSync(readmePath, 'utf8')
-  const statusRow = /(\|\s*\*\*Status\*\*\s*\|\s*)`?[a-z]+`?/i
-  const next = statusRow.test(readme)
-    ? readme.replace(statusRow, `$1\`${status}\``)
-    : readme.replace(/(\|\s*\*\*Client\*\*.*\n)/i, `$1| **Status** | \`${status}\` |\n`)
-  fs.writeFileSync(readmePath, next, 'utf8')
+  let md = fs.readFileSync(readmePath, 'utf8')
+  // A blank field for a row the README doesn't have: nothing to change, don't add a placeholder row.
+  if (clean.purpose === '' && !readPurpose(md)) delete clean.purpose
+  for (const key of Object.keys(INFO_ROWS) as InfoKey[]) if (clean[key] === '' && !infoValue(md, key)) delete clean[key]
+  if (clean.name !== undefined) {
+    md = /^#\s+.+$/m.test(head(md)) ? md.replace(/^#\s+.+$/m, () => `# ${clean.name}`) : `# ${clean.name}\n\n${md}`
+  }
+  if (clean.purpose !== undefined) {
+    const line = clean.purpose ? `> ${clean.purpose}` : '> TODO: one-line purpose'
+    const h = head(md)
+    const i = h.search(/^>\s+.+$/m)
+    md = i === -1 ? md.replace(/^#\s+.+$/m, (title) => `${title}\n\n${line}`) : md.slice(0, i) + md.slice(i).replace(/^>\s+.+$/m, () => line)
+  }
+  for (const key of Object.keys(INFO_ROWS) as InfoKey[]) if (clean[key] !== undefined) md = setInfoRow(md, key, clean[key]!)
+
+  // Read the new text back the same way the app reads it; refuse to write anything that wouldn't stick.
+  const expected: Record<string, [string, string]> = {}
+  if (clean.name !== undefined) expected.name = [readName(md), clean.name]
+  if (clean.purpose !== undefined) expected.purpose = [readPurpose(md), clean.purpose || 'TODO: one-line purpose']
+  for (const key of Object.keys(INFO_ROWS) as InfoKey[])
+    if (clean[key] !== undefined) expected[key] = [infoValue(md, key), clean[key] || (INFO_ROWS[key].code ? '' : '—')]
+  const failed = Object.entries(expected).filter(([, [got, want]]) => got !== want).map(([k]) => k)
+  if (failed.length) throw new Error(`Couldn’t update ${failed.join(', ')} in README.md. Check the format of its info table.`)
+  fs.writeFileSync(readmePath, md, 'utf8')
+
+  const saved = getProject(slug)!
+  // Registry columns: Project | Client | Status | Started | Purpose. Only the edited ones change.
+  const registry = readText(REGISTRY_FILE)
+  if (registry) {
+    const rowRe = new RegExp(`^\\|\\s*\\[${slug}\\]\\([^)]*\\)\\s*\\|.*$`, 'm')
+    const next = registry.replace(rowRe, (line) => {
+      const cells = line.split('|').slice(1, -1).map((c) => c.trim())
+      if (cells.length < 5) return line
+      const col = { client: 1, status: 2, started: 3, purpose: 4 } as const
+      for (const [k, i] of Object.entries(col)) {
+        const v = clean[k as keyof ProjectInfo]
+        if (v !== undefined) cells[i] = k === 'status' ? `\`${v}\`` : v || '—'
+      }
+      return `| ${cells.join(' | ')} |`
+    })
+    if (next !== registry) fs.writeFileSync(REGISTRY_FILE, next, 'utf8')
+  }
+  return { name: saved.name, purpose: saved.purpose, client: saved.client, status: saved.status as Status, version: saved.version, started: saved.started }
+}
+
+/** Updates the status in the project README and in the registry row. */
+export function setProjectStatus(slug: string, status: Status): void {
+  updateProjectInfo(slug, { status })
+}
+
+/** Archives or restores a project by writing/removing the marker file. Nothing else changes. */
+export function setProjectArchived(slug: string, archived: boolean): void {
+  if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
+  const marker = path.join(PROJECTS_DIR, slug, ARCHIVE_MARKER)
+  if (archived) fs.writeFileSync(marker, new Date().toISOString() + '\n', 'utf8')
+  else fs.rmSync(marker, { force: true })
+}
+
+/** Permanently deletes the project folder and its registry row. n8n itself is not touched. */
+export function deleteProjectFolder(slug: string): void {
+  if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
+  const dir = path.join(PROJECTS_DIR, slug)
+  if (!isInside(PROJECTS_DIR, dir)) throw new Error('Refusing to delete outside the projects folder.')
+  fs.rmSync(dir, { recursive: true, force: true })
 
   const registry = readText(REGISTRY_FILE)
   if (registry) {
-    const rowRe = new RegExp(`^(\\|\\s*\\[${slug}\\]\\([^)]*\\)\\s*\\|[^|]*\\|\\s*)\`?[a-z]+\`?`, 'm')
-    if (rowRe.test(registry)) fs.writeFileSync(REGISTRY_FILE, registry.replace(rowRe, `$1\`${status}\``), 'utf8')
+    const rowRe = new RegExp(`^\\|\\s*\\[${slug}\\]\\(.*\\r?\\n?`, 'm')
+    if (rowRe.test(registry)) fs.writeFileSync(REGISTRY_FILE, registry.replace(rowRe, ''), 'utf8')
   }
 }
 

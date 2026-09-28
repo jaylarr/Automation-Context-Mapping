@@ -7,7 +7,8 @@ import { canSelfManage, readMaintenanceLog } from '@/lib/maintenance'
 import { PageHeader, StatusBadge } from '@/components/ui'
 import { listInstances } from '@/lib/instances'
 import { DATABASE_PATH, WORKSPACE_ROOT } from '@/lib/paths'
-import { env, getSettings } from '@/lib/settings'
+import { env, getArchivedDisplay, getSettings } from '@/lib/settings'
+import { ArchivedDisplaySelect } from '@/components/archived-display-select'
 import { db } from '@/lib/db'
 
 export const metadata: Metadata = { title: 'Settings' }
@@ -49,6 +50,8 @@ export default function SettingsPage() {
             <h2>Sync & retention</h2>
           </div>
           <SettingsForm settings={getSettings()} />
+          <hr className="divider" />
+          <ArchivedDisplaySelect value={getArchivedDisplay()} />
         </div>
       </section>
 
