@@ -17,6 +17,8 @@ import { listTestRuns } from '@/lib/test-results'
 import { STATUSES, getProject, projectRepoStatus, readProjectDoc } from '@/lib/projects'
 import { backupSummary } from '@/lib/git'
 import { BackupCard } from '@/components/backup-card'
+import { RestoreButton } from '@/components/restore-button'
+import { connectedInstances } from '@/lib/instances'
 
 /** What to paste into Claude Code / Codex so it starts on this project with full context. */
 function kickoffPrompt(slug: string): string {
@@ -52,6 +54,7 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
   }))
   const prompt = kickoffPrompt(slug)
   const repo = projectRepoStatus(slug)
+  const instances = connectedInstances().map((i) => ({ id: i.id, name: i.name }))
 
   return (
     <>
@@ -104,6 +107,7 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
                       <th>Trigger</th>
                       <th className="num">Nodes</th>
                       <th>Credentials</th>
+                      <th aria-label="Restore to n8n" />
                     </tr>
                   </thead>
                   <tbody>
@@ -125,6 +129,7 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
                         <td className="small">{w.triggers.join(', ') || '—'}</td>
                         <td className="num">{w.nodeCount}</td>
                         <td className="small muted">{w.credentials.join(', ') || '—'}</td>
+                        <td>{!w.parseError && <RestoreButton slug={slug} file={w.file} instances={instances} />}</td>
                       </tr>
                     ))}
                   </tbody>

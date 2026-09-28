@@ -35,6 +35,7 @@ import { setEnvValues } from '@/lib/envfile'
 import { type MaintenanceAction, launchMaintenance } from '@/lib/maintenance'
 import { type ImportResult, importWorkflow } from '@/lib/workflow-import'
 import { runAutoExport } from '@/lib/auto-export'
+import { type RestorePreview, previewRestore, restoreWorkflow } from '@/lib/restore'
 
 export type ActionState = { ok: boolean; message: string } | null
 
@@ -211,6 +212,41 @@ export async function runAutoExportAction(): Promise<ActionState> {
     return { ok: r.skipped.length === 0, message: `${parts.join(', ')}.` }
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : 'Auto-export failed.' }
+  }
+}
+
+// ------------------------------------------------------------------ restore to n8n (writes to n8n; never publishes)
+
+export async function previewRestoreAction(slug: string, file: string, instanceId: string): Promise<{ ok: boolean; message?: string; preview?: RestorePreview }> {
+  try {
+    return { ok: true, preview: await previewRestore(slug, file, instanceId) }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not check the workflow on n8n.' }
+  }
+}
+
+export async function restoreWorkflowAction(slug: string, file: string, instanceId: string, confirmPublished: boolean): Promise<ActionState> {
+  try {
+    const r = await restoreWorkflow(slug, file, instanceId, confirmPublished)
+    logActivity({
+      level: 'warn',
+      action: 'workflow.restore',
+      message: `Restored ${slug}/${file} to ${r.instance} (${r.action === 'create' ? `created ${r.id}` : `updated ${r.id}`}, not published)`,
+      project: slug,
+      meta: r,
+    })
+    revalidatePath('/', 'layout')
+    return {
+      ok: true,
+      message:
+        r.action === 'create'
+          ? `Created "${r.name}" on ${r.instance} (id ${r.id}, not published). The file now uses the new id. Check its credentials in n8n.`
+          : `Updated "${r.name}" on ${r.instance}. Check its credentials in n8n, then publish there if needed.`,
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Restore failed.'
+    logActivity({ level: 'error', action: 'workflow.restore', message: `Restore of ${slug}/${file} failed: ${message}`, project: slug })
+    return { ok: false, message }
   }
 }
 

@@ -50,7 +50,7 @@ repo. The steps below close the rest of the gap.
 - **Notes:** a workflow that fails sanitizing (a secret typed into a node) is skipped and reported
   in the Overview, the same way Import handles it today.
 
-### A4. "Restore to n8n" (the pull half) (P2)
+### A4. "Restore to n8n" (the pull half) (P2) — done 2026-09-29, see Done
 
 - **Problem:** the app only **reads** from n8n. Restoring an older version means importing the JSON
   by hand in the n8n UI.
@@ -168,6 +168,7 @@ matter once there's a team or client-facing reporting.
 
 | Date | Feature |
 |---|---|
+| 2026-09-29 | **Restore to n8n (A4).** Per-workflow button on the project page: updates the workflow with the same id or creates it (and writes the new id into the file), never publishes, extra typed confirmation when the target is published, credential names listed, secret check, CHANGELOG line. |
 | 2026-09-29 | **macOS + Linux.** `new-project`, `init-project-repo` and `link-skills` are Node scripts (`scripts/*.mjs`; the `.ps1` files are Windows wrappers); the app calls them with Node. `scripts/control-center.mjs` installs the Control Center as a launchd agent (macOS) or systemd user service (Linux), with a safe `update` + rollback. CI runs the scripts on Ubuntu, macOS and Windows. In-app Restart/Update stays Windows-only. |
 | 2026-09-29 | **Backups (A1 + A3).** Backup chip on every project card, a Backup card with **Commit** (secret check, CHANGELOG line when workflows changed, never pushes) and **Set up git**, a first commit for projects created in the app, and scheduled auto-export with optional auto-commit (Settings → Backups). Secret patterns now also catch Telegram bot tokens, JWTs, Google and Stripe keys, Slack webhooks and private keys. |
 | 2026-09-28 | **Recoverable project delete.** Delete moves the project to `n8n workflows/_trash/` for 30 days; **Settings → Recently deleted** restores or purges it. The dialog warns when the project has no remote, unpushed commits, or uncommitted files. |

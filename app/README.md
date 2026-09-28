@@ -138,6 +138,20 @@ sending history to a remote stays a manual step.
   optional auto-commit of just those files. Only workflows already saved in a project are updated;
   new workflows still go through Import. **Export changed workflows now** runs it once.
 
+## Restore to n8n
+
+On a project page, the **⤒** button on each workflow row sends that saved JSON back to n8n:
+
+- Pick the instance (with several, nothing is preselected). The dialog asks n8n first and says what
+  will happen: **update** the workflow with the same id, or **create** it when it's missing (the file
+  then gets the new id, so Import and Restore keep matching).
+- It's **never published**. If the target is published, restoring can change what runs live, so you
+  must type `restore` to confirm.
+- It lists the credential names the workflow needs on that instance, and refuses a file with a secret
+  typed into a node. Only settings the n8n API accepts are sent (tags aren't).
+- Each restore adds a CHANGELOG line and an App activity entry. n8n keeps the replaced version in its
+  version history.
+
 ## Deleting a project
 
 **Delete** on a project card moves the folder to `n8n workflows/_trash/<slug>--<date>/`, git history

@@ -34,14 +34,15 @@ export function isConfigured(): boolean {
 export async function api<T>(
   instance: Pick<Instance, 'id' | 'name' | 'baseUrl'>,
   pathAndQuery: string,
-  method: 'GET' | 'POST' = 'GET',
+  method: 'GET' | 'POST' | 'PUT' = 'GET',
+  body?: unknown,
 ): Promise<T> {
   const key = apiKeyFor(instance.id)
   if (!key) throw new Error(`No API key saved for "${instance.name}". Add it in Settings.`)
   const res = await fetch(`${instance.baseUrl}/api/v1${pathAndQuery}`, {
     method,
-    headers: { 'X-N8N-API-KEY': key, accept: 'application/json', ...(method === 'POST' ? { 'content-type': 'application/json' } : {}) },
-    body: method === 'POST' ? '{}' : undefined,
+    headers: { 'X-N8N-API-KEY': key, accept: 'application/json', ...(method !== 'GET' ? { 'content-type': 'application/json' } : {}) },
+    body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
     cache: 'no-store',
     signal: AbortSignal.timeout(15_000),
   })

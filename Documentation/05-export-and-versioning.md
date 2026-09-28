@@ -85,6 +85,9 @@ an undo button. **It is not a replacement for git.** It lives and dies with the 
 
 ## Importing a workflow (deploy or restore)
 
+**Easiest:** the **Restore to n8n** button on the workflow's row in the Control Center project page
+(updates or creates it, never publishes). Then do steps 2–5 below. By hand:
+
 1. In the target instance: **Import from File** → pick `NN-<slug>.json`.
 2. **Re-bind credentials** on every node that uses one (the import matches by name, so check each
    node anyway).
