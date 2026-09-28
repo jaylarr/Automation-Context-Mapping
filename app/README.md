@@ -12,7 +12,7 @@ cloud database.
 | **Workflows** | Lists every n8n workflow as New / Changed in n8n / Up to date versus the backups in project folders. Import or update them one by one or in bulk (with confirmation): sanitized JSON goes into `n8n workflows/<project>/workflows/`, plus a changelog entry. Auto-matches projects by `[slug]` name or tag; hardcoded secrets are refused. The **⚙ button** on each row opens that workflow's settings (below). The **Needs attention** tab lists alerts and published workflows without an error workflow. Sort (latest / oldest edited, name) and filter by published and imported. The **In n8n** badge on each row shows Published / Not published; click it to publish or unpublish (always confirmed). The list is cached (see below), so the page opens instantly; **Refresh** re-reads n8n |
 | **Logs** | Three logs, each with search, filters, pagination, and a **Live** auto-refresh: n8n executions, the event inbox, app activity |
 | **Docs & skills** | `AGENTS.md`, `Documentation/`, templates, and every skill, rendered with search |
-| **Settings** | **n8n instances** (add/edit/test/sync/remove any number of n8n servers; keys go to `.env.local` as `N8N_API_KEY__<ID>`), auto-sync interval, log retention, event-inbox token, app maintenance, DB info |
+| **Settings** | **n8n instances** (add/edit/test/sync/remove any number of n8n servers; keys go to `.env.local` as `N8N_API_KEY__<ID>`), auto-sync interval, log retention, event-inbox token, **Recently deleted** projects (restore within 30 days), app maintenance, DB info |
 
 ## Run it
 
@@ -85,6 +85,7 @@ can also edit that file by hand:
 | `INGEST_TOKEN` | Event inbox | A random secret: `node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"` |
 | `WORKSPACE_ROOT` | optional | Defaults to the folder above `app/` |
 | `DATABASE_PATH` | optional | Defaults to `app/data/control-center.db` |
+| `CONTROL_CENTER_HOSTS` | optional | Extra host names the app answers to, comma-separated (see Host lock below) |
 
 Secrets live only in `.env.local`, never in the database, and the app never sends a saved key back to
 the browser. Non-secret settings (sync interval, retention) are stored in the local database.
@@ -103,6 +104,20 @@ Add an **HTTP Request** node:
 The app listens on `127.0.0.1`, so only this machine can reach it. If n8n runs elsewhere, start it
 with `-H 0.0.0.0` (edit `package.json`) or put a tunnel in front. The token keeps protecting the
 endpoint.
+
+**Host lock.** The app has no login, so it only answers requests addressed to `127.0.0.1`,
+`localhost`, `[::1]` or `host.docker.internal` (`src/proxy.ts`). Anything else gets `421`. This
+stops a web page on another domain from re-pointing its own name at your PC (DNS rebinding) and
+driving the app from your browser. Reaching it under another name (a tunnel, a LAN hostname)? Add
+that name to `CONTROL_CENTER_HOSTS` in `.env.local` and restart.
+
+## Deleting a project
+
+**Delete** on a project card moves the folder to `n8n workflows/_trash/<slug>--<date>/`, git history
+included. **Settings → Recently deleted** restores it (with its registry row and its logs) or deletes
+it for good. After 30 days it's deleted automatically, together with its logs, events and executions
+in the Control Center. The delete dialog warns when the project has no git remote, unpushed commits,
+or uncommitted files, because then the folder is the only copy. n8n itself is never touched.
 
 ## Per-workflow settings
 

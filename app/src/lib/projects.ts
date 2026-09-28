@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
 import { NEW_PROJECT_SCRIPT, PROJECTS_DIR, REGISTRY_FILE, SLUG_RE, WORKSPACE_ROOT, isInside } from './paths'
 import { type BriefState, briefState } from './brief'
@@ -368,17 +368,144 @@ export function setProjectArchived(slug: string, archived: boolean): void {
   else fs.rmSync(marker, { force: true })
 }
 
-/** Permanently deletes the project folder and its registry row. n8n itself is not touched. */
-export function deleteProjectFolder(slug: string): void {
+// ---------------------------------------------------------------- trash (deleted projects)
+
+/**
+ * Deleted projects go to "n8n workflows/_trash/<slug>--<timestamp>/" (skipped by listProjects, like
+ * _template) and are purged after TRASH_DAYS. The folder holds the project's only git history when
+ * it has no remote, so a delete must be undoable.
+ */
+export const TRASH_DIR = path.join(PROJECTS_DIR, '_trash')
+export const TRASH_DAYS = 30
+const REGISTRY_ROW_FILE = '.registry-row' // the removed registry row, put back on restore
+const TRASH_RE = /^([a-z0-9]+(?:-[a-z0-9]+)*)--(\d{8}-\d{6})$/
+
+export type TrashedProject = { id: string; slug: string; name: string; deletedAt: string; purgeAt: string }
+
+function stamp(d: Date): string {
+  return d.toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-') // 20260928-142530
+}
+
+function parseStamp(s: string): Date {
+  return new Date(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T${s.slice(9, 11)}:${s.slice(11, 13)}:${s.slice(13, 15)}Z`)
+}
+
+/** Rename, or copy + remove when Windows refuses the rename (a file open in an editor, antivirus). */
+function moveDir(from: string, to: string): void {
+  try {
+    fs.renameSync(from, to)
+  } catch (e) {
+    if (!['EPERM', 'EACCES', 'EBUSY', 'EXDEV'].includes((e as NodeJS.ErrnoException).code ?? '')) throw e
+    fs.cpSync(from, to, { recursive: true })
+    fs.rmSync(from, { recursive: true, force: true })
+  }
+}
+
+/** Moves the project folder to the trash and takes its row out of the registry. n8n is not touched. */
+export function trashProject(slug: string): string {
   if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
   const dir = path.join(PROJECTS_DIR, slug)
-  if (!isInside(PROJECTS_DIR, dir)) throw new Error('Refusing to delete outside the projects folder.')
-  fs.rmSync(dir, { recursive: true, force: true })
+  const id = `${slug}--${stamp(new Date())}`
+  const dest = path.join(TRASH_DIR, id)
+  if (!isInside(PROJECTS_DIR, dir) || !isInside(TRASH_DIR, dest)) throw new Error('Refusing to move outside the projects folder.')
+  fs.mkdirSync(TRASH_DIR, { recursive: true })
+  moveDir(dir, dest)
 
   const registry = readText(REGISTRY_FILE)
   if (registry) {
-    const rowRe = new RegExp(`^\\|\\s*\\[${slug}\\]\\(.*\\r?\\n?`, 'm')
-    if (rowRe.test(registry)) fs.writeFileSync(REGISTRY_FILE, registry.replace(rowRe, ''), 'utf8')
+    const rowRe = new RegExp(`^\\|\\s*\\[${slug}\\]\\(.*(\\r?\\n)?`, 'm')
+    const row = registry.match(rowRe)?.[0]
+    if (row) {
+      fs.writeFileSync(path.join(dest, REGISTRY_ROW_FILE), row.trimEnd() + '\n', 'utf8')
+      fs.writeFileSync(REGISTRY_FILE, registry.replace(rowRe, ''), 'utf8')
+    }
+  }
+  return id
+}
+
+export function listTrash(): TrashedProject[] {
+  if (!fs.existsSync(TRASH_DIR)) return []
+  return fs
+    .readdirSync(TRASH_DIR, { withFileTypes: true })
+    .flatMap((d) => {
+      const m = d.isDirectory() ? d.name.match(TRASH_RE) : null
+      if (!m) return []
+      const deleted = parseStamp(m[2])
+      const readme = readText(path.join(TRASH_DIR, d.name, 'README.md')) ?? ''
+      return [
+        {
+          id: d.name,
+          slug: m[1],
+          name: readName(readme) || prettify(m[1]),
+          deletedAt: deleted.toISOString(),
+          purgeAt: new Date(deleted.getTime() + TRASH_DAYS * 86_400_000).toISOString(),
+        },
+      ]
+    })
+    .sort((a, b) => b.deletedAt.localeCompare(a.deletedAt))
+}
+
+function trashPath(id: string): string {
+  const dir = path.join(TRASH_DIR, id)
+  if (!TRASH_RE.test(id) || !isInside(TRASH_DIR, dir) || !fs.existsSync(dir)) throw new Error('Not in the trash.')
+  return dir
+}
+
+/** Moves a trashed project back to "n8n workflows/<slug>/" and restores its registry row. */
+export function restoreFromTrash(id: string): string {
+  const from = trashPath(id)
+  const slug = id.match(TRASH_RE)![1]
+  const to = path.join(PROJECTS_DIR, slug)
+  if (fs.existsSync(to)) throw new Error(`A project named "${slug}" already exists. Rename or delete it first.`)
+  const rowFile = path.join(from, REGISTRY_ROW_FILE)
+  const row = readText(rowFile)
+  fs.rmSync(rowFile, { force: true })
+  moveDir(from, to)
+  if (row) {
+    const registry = readText(REGISTRY_FILE)
+    if (registry !== null && !registry.includes(`[${slug}](`)) fs.writeFileSync(REGISTRY_FILE, `${registry.replace(/\n*$/, '\n')}${row}`, 'utf8')
+  }
+  return slug
+}
+
+/** Permanently removes one trashed project. Returns its slug. */
+export function purgeFromTrash(id: string): string {
+  const dir = trashPath(id)
+  fs.rmSync(dir, { recursive: true, force: true })
+  return id.match(TRASH_RE)![1]
+}
+
+/** Purges everything older than TRASH_DAYS. Returns the slugs removed. */
+export function purgeExpiredTrash(now = Date.now()): string[] {
+  return listTrash()
+    .filter((t) => Date.parse(t.purgeAt) <= now)
+    .map((t) => purgeFromTrash(t.id))
+}
+
+// ---------------------------------------------------------------- backup status (for the delete dialog)
+
+export type BackupStatus = { hasRepo: boolean; remotes: string[]; uncommitted: number; unpushed: number | null }
+
+/** What would be lost if this folder disappeared: is it in git, and has it left this PC? */
+export function projectBackupStatus(slug: string): BackupStatus {
+  if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
+  const cwd = path.join(PROJECTS_DIR, slug)
+  if (!fs.existsSync(path.join(cwd, '.git'))) return { hasRepo: false, remotes: [], uncommitted: 0, unpushed: null }
+  const git = (...args: string[]) => {
+    try {
+      return execFileSync('git', args, { cwd, encoding: 'utf8', timeout: 10_000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    } catch {
+      return null
+    }
+  }
+  const lines = (s: string | null) => (s ? s.split('\n').filter(Boolean) : [])
+  const remotes = lines(git('remote'))
+  const upstream = git('rev-list', '--count', '@{upstream}..HEAD')
+  return {
+    hasRepo: true,
+    remotes,
+    uncommitted: lines(git('status', '--porcelain')).length,
+    unpushed: upstream === null ? null : Number(upstream),
   }
 }
 

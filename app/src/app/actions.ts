@@ -10,8 +10,22 @@ import { LOG_MODES, type PrefsInput, purgeNonMatching, saveWorkflowPrefs } from 
 import { addInstance, clearInstanceKey, connectedInstances, getInstance, listInstances, removeInstance, updateInstance } from '@/lib/instances'
 import { INSTANCE_COOKIE } from '@/lib/instance-filter'
 import { cookies } from 'next/headers'
-import { STATUSES, type Status, createProject, deleteProjectFolder, listProjects, setProjectArchived, setProjectStatus, updateProjectInfo } from '@/lib/projects'
-import { db } from '@/lib/db'
+import {
+  type BackupStatus,
+  STATUSES,
+  type Status,
+  TRASH_DAYS,
+  createProject,
+  listProjects,
+  projectBackupStatus,
+  purgeFromTrash,
+  restoreFromTrash,
+  setProjectArchived,
+  setProjectStatus,
+  trashProject,
+  updateProjectInfo,
+} from '@/lib/projects'
+import { dropRowsOfGoneProjects } from '@/lib/trash-cleanup'
 import { MAX_BRIEF_CHARS, MAX_FILE_BYTES, briefTemplate, deleteBriefFile, readBrief, saveBrief, saveBriefFiles, withAskedText } from '@/lib/brief'
 import { addToTestRun, createTestRun, deleteTestFile } from '@/lib/test-results'
 import { saveSettings, setMeta } from '@/lib/settings'
@@ -130,20 +144,55 @@ export async function setArchivedAction(slug: string, archived: boolean): Promis
   return { ok: true, message: archived ? 'Project archived.' : 'Project restored.' }
 }
 
-/** Deletes the project folder, its registry row, and its Control Center rows. n8n is not touched. */
+/**
+ * Moves the project folder to the trash (kept TRASH_DAYS days, restorable from Settings). Its
+ * Control Center rows stay until the trash entry is purged. n8n is not touched.
+ */
 export async function deleteProjectAction(slug: string, confirmation: string): Promise<ActionState> {
   if (confirmation !== 'confirm-delete') return { ok: false, message: 'Type confirm-delete to delete the project.' }
+  let id: string
   try {
-    deleteProjectFolder(slug)
-    db.transaction(() => {
-      for (const table of ['events', 'executions', 'activity'] as const) db.prepare(`DELETE FROM ${table} WHERE project = ?`).run(slug)
-    })()
+    id = trashProject(slug)
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : 'Could not delete the project.' }
   }
-  logActivity({ level: 'warn', action: 'project.delete', message: `Deleted project ${slug} (folder and Control Center data)` })
+  logActivity({ level: 'warn', action: 'project.delete', message: `Moved project ${slug} to the trash (kept ${TRASH_DAYS} days)`, project: slug, meta: { trashId: id } })
   // No revalidatePath here: the caller's card would unmount mid-transition. The client closes its dialog, then refreshes.
-  return { ok: true, message: `Project ${slug} deleted.` }
+  return { ok: true, message: `Project ${slug} moved to the trash.` }
+}
+
+/** Read-only: git state of a project, so the delete dialog can say what exists only on this PC. */
+export async function projectBackupStatusAction(slug: string): Promise<BackupStatus | null> {
+  try {
+    return projectBackupStatus(slug)
+  } catch {
+    return null
+  }
+}
+
+export async function restoreProjectAction(id: string): Promise<ActionState> {
+  let slug: string
+  try {
+    slug = restoreFromTrash(id)
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not restore the project.' }
+  }
+  logActivity({ level: 'info', action: 'project.restore', message: `Restored project ${slug} from the trash`, project: slug })
+  revalidatePath('/', 'layout')
+  return { ok: true, message: `Restored ${slug}.` }
+}
+
+export async function purgeTrashedProjectAction(id: string): Promise<ActionState> {
+  let slug: string
+  try {
+    slug = purgeFromTrash(id)
+    dropRowsOfGoneProjects([slug])
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not delete the project.' }
+  }
+  logActivity({ level: 'warn', action: 'project.purge', message: `Permanently deleted project ${slug} (folder and Control Center data)` })
+  revalidatePath('/settings')
+  return { ok: true, message: `${slug} permanently deleted.` }
 }
 
 export async function setArchivedDisplayAction(value: string): Promise<ActionState> {

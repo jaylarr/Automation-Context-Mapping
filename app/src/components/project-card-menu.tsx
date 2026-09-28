@@ -3,10 +3,30 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Archive, ArchiveRestore, Loader2, Settings, Trash2 } from 'lucide-react'
-import { deleteProjectAction, setArchivedAction } from '@/app/actions'
+import { deleteProjectAction, projectBackupStatusAction, setArchivedAction } from '@/app/actions'
+import type { BackupStatus } from '@/lib/projects'
 import { useScrollLock } from './use-modal'
 
 const PHRASE = 'confirm-delete'
+
+/** Says plainly when the folder is the only copy of this project's work. */
+function BackupWarning({ status }: { status: BackupStatus | null }) {
+  if (!status) return null
+  const lines: string[] = []
+  if (!status.hasRepo) lines.push('This project has no git repo, so this folder is the only copy of its files.')
+  else {
+    if (!status.remotes.length) lines.push('Its git repo has no remote, so its history exists only on this PC.')
+    else if (status.unpushed === null) lines.push('Its branch isn’t tracking a remote branch, so recent commits may exist only on this PC.')
+    else if (status.unpushed > 0) lines.push(`${status.unpushed} commit${status.unpushed === 1 ? ' hasn’t' : 's haven’t'} been pushed yet.`)
+    if (status.uncommitted > 0) lines.push(`${status.uncommitted} changed file${status.uncommitted === 1 ? ' is' : 's are'} not committed.`)
+  }
+  if (!lines.length) return null
+  return (
+    <p role="note" style={{ color: 'var(--warn)' }}>
+      <strong>Not backed up:</strong> {lines.join(' ')}
+    </p>
+  )
+}
 
 /** Gear menu on a project card: archive/restore and delete (typed confirmation). */
 export function ProjectCardMenu({ slug, name, archived }: { slug: string; name: string; archived: boolean }) {
@@ -90,16 +110,20 @@ function DeleteProjectDialog({ open, slug, name, onClose }: { open: boolean; slu
   const router = useRouter()
   useScrollLock(open)
 
+  const [backup, setBackup] = useState<BackupStatus | null>(null)
+
   useEffect(() => {
     const d = ref.current
     if (!d) return
     if (open && !d.open) {
       setText('')
       setError(null)
+      setBackup(null)
       d.showModal()
+      projectBackupStatusAction(slug).then(setBackup, () => setBackup(null))
     }
     if (!open && d.open) d.close()
-  }, [open])
+  }, [open, slug])
 
   const cancel = () => {
     if (!pending) onClose()
@@ -138,10 +162,12 @@ function DeleteProjectDialog({ open, slug, name, onClose }: { open: boolean; slu
         </h2>
         <div className="small muted stack-sm">
           <p>
-            This permanently deletes the folder <code>n8n workflows/{slug}/</code> (workflows, docs, client brief, website) and its logs, events and
-            executions in the Control Center. It cannot be undone. Workflows on your n8n instance are not touched.
+            The folder <code>n8n workflows/{slug}/</code> (workflows, docs, client brief, git history) moves to the trash. You can restore it from{' '}
+            <strong>Settings → Recently deleted</strong> for 30 days; after that it&rsquo;s deleted for good, along with its logs in the Control
+            Center. Workflows on your n8n instance are not touched.
           </p>
           <p>If you only want it out of the way, archive it instead.</p>
+          <BackupWarning status={backup} />
         </div>
         <div className="field">
           <label htmlFor={`delete-${slug}-input`}>

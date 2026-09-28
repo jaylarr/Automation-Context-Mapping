@@ -10,6 +10,8 @@ import { DATABASE_PATH, WORKSPACE_ROOT } from '@/lib/paths'
 import { env, getArchivedDisplay, getSettings } from '@/lib/settings'
 import { ArchivedDisplaySelect } from '@/components/archived-display-select'
 import { db } from '@/lib/db'
+import { TRASH_DAYS, listTrash } from '@/lib/projects'
+import { TrashList } from '@/components/trash-list'
 
 export const metadata: Metadata = { title: 'Settings' }
 
@@ -73,6 +75,14 @@ export default function SettingsPage() {
         <pre className="mono" style={{ margin: 0, padding: 'var(--s-4)', background: 'var(--field)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflowX: 'auto' }}>
           {curl}
         </pre>
+      </section>
+
+      <section className="card" id="trash">
+        <div className="card-head">
+          <h2>Recently deleted</h2>
+          <span className="faint small">kept {TRASH_DAYS} days</span>
+        </div>
+        <TrashList items={listTrash()} />
       </section>
 
       <MaintenanceCard available={selfManage.ok} reason={selfManage.reason} log={readMaintenanceLog()} />

@@ -10,7 +10,20 @@ export async function register() {
   const { listProjects } = await import('./lib/projects')
   const { logActivity } = await import('./lib/logs')
 
+  const { purgeExpiredTrashAndRows } = await import('./lib/trash-cleanup')
+
   logActivity({ level: 'info', action: 'app.start', message: 'Control center started' })
+
+  // Deleted projects older than 30 days: checked at start, then hourly.
+  const purgeTrash = () => {
+    try {
+      purgeExpiredTrashAndRows()
+    } catch (e) {
+      logActivity({ level: 'error', action: 'project.purge', message: `Emptying the trash failed: ${e instanceof Error ? e.message : e}` })
+    }
+  }
+  purgeTrash()
+  setInterval(purgeTrash, 60 * 60_000).unref()
 
   const TICK_MS = 60_000
   setInterval(() => {

@@ -168,4 +168,7 @@ matter once there's a team or client-facing reporting.
 
 | Date | Feature |
 |---|---|
+| 2026-09-28 | **Recoverable project delete.** Delete moves the project to `n8n workflows/_trash/` for 30 days; **Settings → Recently deleted** restores or purges it. The dialog warns when the project has no remote, unpushed commits, or uncommitted files. |
+| 2026-09-28 | **Host lock (DNS-rebinding guard).** `app/src/proxy.ts` answers only requests addressed to this machine; extra names via `CONTROL_CENTER_HOSTS`. |
+| 2026-09-28 | **CI + fresh-clone fix.** GitHub Actions builds the Control Center on Ubuntu, macOS and Windows from a clean checkout. |
 | 2026-09-28 | **Project details form.** The project page edits the README's name, purpose, client, status, version and started date (**Edit details** + the Status dropdown). Hand-written variants such as `\| Stage \| … \|` or non-bold labels are read and rewritten to the template format, and a save that doesn't stick shows an error instead of "saved". The rest of the README stays with agents. |
