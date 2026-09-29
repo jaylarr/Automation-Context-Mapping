@@ -168,6 +168,7 @@ matter once there's a team or client-facing reporting.
 
 | Date | Feature |
 |---|---|
+| 2026-09-29 | **Open-source polish.** `node scripts/setup.mjs` (checks tools, links skills, creates AGENTS.local.md and app/.env.local with a fresh token, `--demo`, `--app`), a fictional demo project in `examples/demo-lead-intake/`, `CONTRIBUTING.md`, `SECURITY.md`, and a README that explains the workspace in its first screen. Screenshots still to add. |
 | 2026-09-29 | **Leaner agent rules + small-job path (D2).** AGENTS.md is the only full copy of the rules; the SessionStart hook now adds a pointer, three reminders and the project list with statuses instead of a second 8-point protocol (~70% less injected rule text). Small jobs (under ~10 nodes, one workflow, no client-system writes) skip the sizing question and use a 3-line spec. |
 | 2026-09-29 | **One sanitizer for everyone.** `app/src/lib/sanitize-core.mjs` is the single workflow sanitizer + secret scanner, used by Import, auto-export, restore, commits, and `scripts/export-workflow.mjs` (which the `n8n-workflow-export` skill now runs instead of sanitizing by hand). 14 tests (`npm test`, in CI). The Stop hook counts an exporter run as export + CHANGELOG. |
 | 2026-09-29 | **Restore to n8n (A4).** Per-workflow button on the project page: updates the workflow with the same id or creates it (and writes the new id into the file), never publishes, extra typed confirmation when the target is published, credential names listed, secret check, CHANGELOG line. |

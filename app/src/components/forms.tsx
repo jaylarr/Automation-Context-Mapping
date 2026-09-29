@@ -15,9 +15,10 @@ function Result({ state }: { state: ActionState }) {
   )
 }
 
-function Submit({ pending, children, pendingLabel }: { pending: boolean; children: React.ReactNode; pendingLabel: string }) {
+/** `disabled` greys the button out (e.g. an incomplete form); only `pending` shows the busy spinner. */
+function Submit({ pending, disabled = false, children, pendingLabel }: { pending: boolean; disabled?: boolean; children: React.ReactNode; pendingLabel: string }) {
   return (
-    <button type="submit" className="btn btn-primary" disabled={pending}>
+    <button type="submit" className="btn btn-primary" disabled={pending || disabled}>
       {pending ? (
         <>
           <Loader2 aria-hidden style={{ animation: 'spin 0.9s linear infinite' }} />
@@ -109,7 +110,7 @@ export function NewProjectForm({ initialSlug = '' }: { initialSlug?: string }) {
       </label>
       <hr className="divider" />
       <div className="row">
-        <Submit pending={pending || !valid} pendingLabel="Creating…">
+        <Submit pending={pending} disabled={!valid} pendingLabel="Creating…">
           Create project
         </Submit>
         <Result state={state} />

@@ -1,0 +1,234 @@
+{
+  "id": "demoLeadIntake01",
+  "name": "[demo-lead-intake] Receive lead",
+  "description": "Receives contact-form leads by webhook, rejects leads without an email (400), and appends valid ones to the Leads sheet. Sample project with fictional data.",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "demo-lead-intake"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "d0000000-0000-4000-8000-000000000001",
+      "name": "Receive form lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        80,
+        260
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "demo-lead-intake/lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "d0000000-0000-4000-8000-00000000aaaa"
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000002",
+      "name": "Has an email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        320,
+        260
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Receive form lead').item.json.body.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000003",
+      "name": "Add lead to sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        560,
+        200
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_LEADS_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Received": "={{ $now.toISO() }}",
+            "Name": "={{ $('Receive form lead').item.json.body.name }}",
+            "Email": "={{ $('Receive form lead').item.json.body.email }}",
+            "Company": "={{ $('Receive form lead').item.json.body.company }}",
+            "Message": "={{ $('Receive form lead').item.json.body.message }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Demo Co Sheets dev"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000004",
+      "name": "Confirm to form",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        800,
+        200
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"ok\": true } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000005",
+      "name": "Reject missing email",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        560,
+        420
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"error\": \"validation_error\", \"message\": \"email is required\" } }}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000010",
+      "name": "Sticky 01",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "content": "## 01 — RECEIVE + CHECK\n\n**What happens here:**  \nThe website form sends each lead here. A lead without an email is turned away with a clear error.",
+        "width": 480,
+        "height": 560,
+        "color": 5
+      }
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000011",
+      "name": "Sticky 02",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        496,
+        0
+      ],
+      "parameters": {
+        "content": "## 02 — SAVE + CONFIRM\n\n**What happens here:**  \nValid leads are added to the Leads sheet and the form is told it worked.",
+        "width": 480,
+        "height": 340,
+        "color": 6
+      }
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000012",
+      "name": "Sticky EX",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        496,
+        356
+      ],
+      "parameters": {
+        "content": "## EXCEPTIONS\n\nMissing email → 400 back to the form.",
+        "width": 480,
+        "height": 204,
+        "color": 2
+      }
+    }
+  ],
+  "connections": {
+    "Receive form lead": {
+      "main": [
+        [
+          {
+            "node": "Has an email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has an email?": {
+      "main": [
+        [
+          {
+            "node": "Add lead to sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject missing email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add lead to sheet": {
+      "main": [
+        [
+          {
+            "node": "Confirm to form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

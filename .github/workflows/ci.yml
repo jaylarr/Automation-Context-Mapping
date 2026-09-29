@@ -63,8 +63,12 @@ jobs:
           test -d "$root/ci-smoke-test/.git"
           test ! -d "$root/ci-smoke-test/website"
           ! grep -R "{{PROJECT_SLUG}}" "$root/ci-smoke-test"
-      - name: Link skills
+      - name: First-time setup with the demo project
         run: |
-          node scripts/link-skills.mjs
+          node scripts/setup.mjs --demo
           test -f .claude/skills/n8n-workflow-export/SKILL.md
           test -f .agents/skills/n8n-workflow-export/SKILL.md
+          test -f AGENTS.local.md
+          grep -Eq '^INGEST_TOKEN=[0-9a-f]{48}$' app/.env.local
+          test -f "n8n workflows/demo-lead-intake/workflows/01-receive-lead.json"
+          node scripts/setup.mjs --demo   # re-running changes nothing

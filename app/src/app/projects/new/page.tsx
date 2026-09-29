@@ -18,7 +18,7 @@ export default async function NewProjectPage(props: PageProps<'/projects/new'>) 
           </Link>
         }
         title="New project"
-        description="Scaffolds n8n workflows/<slug>/ with the standard folders and docs, and adds it to the registry. Runs the workspace’s own scripts/new-project.ps1."
+        description="Scaffolds n8n workflows/<slug>/ with the standard folders and docs, and adds it to the registry. Runs the workspace’s own scripts/new-project.mjs."
       />
       <div className="stack" style={{ maxWidth: '48rem' }}>
         <NewProjectForm initialSlug={slug} />
