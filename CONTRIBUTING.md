@@ -12,7 +12,7 @@ node scripts/setup.mjs --demo        # checks tools, links skills, local config,
 cd app && npm ci && npm run dev      # Control Center with hot reload at http://127.0.0.1:3100
 ```
 
-Node 20.9+ (22 LTS recommended) and git. Works on Windows, macOS and Linux.
+Node 22+ (the Control Center's SQLite driver needs it) and git. Works on Windows, macOS and Linux.
 
 ## Before you open a pull request
 

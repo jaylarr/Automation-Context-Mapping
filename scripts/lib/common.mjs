@@ -1,4 +1,4 @@
-// Shared helpers for the workspace scripts (Windows, macOS, Linux). Node 20.9+, no dependencies.
+// Shared helpers for the workspace scripts (Windows, macOS, Linux). Node 22+, no dependencies.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'

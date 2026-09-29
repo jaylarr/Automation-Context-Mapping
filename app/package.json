@@ -11,7 +11,7 @@
     "test": "node --test src/lib/*.test.mjs"
   },
   "engines": {
-    "node": ">=20.9"
+    "node": ">=22"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

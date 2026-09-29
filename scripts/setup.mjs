@@ -16,9 +16,9 @@ const ok = (m) => console.log(`  ✓ ${m}`)
 const todo = []
 
 console.log('Checking tools…')
-const [major, minor] = process.versions.node.split('.').map(Number)
-if (major < 20 || (major === 20 && minor < 9)) {
-  console.error(`  ✗ Node ${process.versions.node}: this workspace needs Node 20.9 or newer (22 LTS recommended).`)
+const [major] = process.versions.node.split('.').map(Number)
+if (major < 22) {
+  console.error(`  ✗ Node ${process.versions.node}: this workspace needs Node 22 or newer (the Control Center's SQLite driver requires it).`)
   process.exit(1)
 }
 ok(`Node ${process.versions.node}`)

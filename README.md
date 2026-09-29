@@ -54,7 +54,7 @@ n8n-agent-workspace/
 
 - **Windows, macOS or Linux.** The scripts are Node (`scripts/*.mjs`); the `.ps1` files are Windows
   shortcuts to the same scripts
-- **Node.js 20.9+** (Claude Code hooks, Control Center) and **git**
+- **Node.js 22+** (Claude Code hooks, scripts, Control Center) and **git**
 - A **self-hosted n8n** with the official **instance-level MCP** enabled (Settings → MCP), connected
   to your agent
 - An AI coding agent: **Claude Code** (rules + skills + hooks), or Codex / Cursor (rules + skills)
