@@ -140,13 +140,16 @@ function open(): Database.Database {
   db.pragma('foreign_keys = ON')
   db.pragma('busy_timeout = 3000')
 
-  const current = db.pragma('user_version', { simple: true }) as number
-  for (let v = current; v < MIGRATIONS.length; v++) {
-    db.transaction(() => {
+  // Read the schema version and migrate under one write lock (BEGIN IMMEDIATE). Several processes can
+  // open a brand-new database at once (the build runs parallel workers); without the lock two of them
+  // read the same version and both apply the same ALTER TABLE ("duplicate column name").
+  db.transaction(() => {
+    const current = db.pragma('user_version', { simple: true }) as number
+    for (let v = current; v < MIGRATIONS.length; v++) {
       db.exec(MIGRATIONS[v])
       db.pragma(`user_version = ${v + 1}`)
-    })()
-  }
+    }
+  }).immediate()
   return db
 }
 
