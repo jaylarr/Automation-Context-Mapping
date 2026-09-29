@@ -54,7 +54,7 @@ n8n-agent-workspace/
 
 - **Windows, macOS or Linux.** The scripts are Node (`scripts/*.mjs`); the `.ps1` files are Windows
   shortcuts to the same scripts
-- **Node.js 22+** (Claude Code hooks, scripts, Control Center) and **git**
+- **Node.js 22.18+** (Claude Code hooks, scripts, Control Center) and **git**
 - A **self-hosted n8n** with the official **instance-level MCP** enabled (Settings → MCP), connected
   to your agent
 - An AI coding agent: **Claude Code** (rules + skills + hooks), or Codex / Cursor (rules + skills)
@@ -100,6 +100,28 @@ It then runs in the background from every login at http://127.0.0.1:3100 (Window
 macOS: a launchd agent; Linux: a systemd user service). Install it as an app
 from Chrome/Edge for its own window. After code changes: `node scripts/control-center.mjs update`.
 See [app/README.md](app/README.md).
+
+### Updating an existing installation
+
+The Control Center now stages updates in separate release directories, runs its checks, and
+backs up the database and local credentials before activation. Failed release health checks
+trigger an application rollback; the database is not automatically rolled back. State snapshots
+are private, unencrypted files under `app/data/snapshots/`; protect them like your credentials.
+
+For the first transition from the old Windows launcher, follow the
+[remediation and migration guide](Documentation/audits/2026-09-29-remediation-handoff.md).
+The updater intentionally refuses to stop an unidentified legacy server.
+
+- Existing workflow exports need an explicit binding to their source installation before automatic
+  export can update them. CLI exports require `--installation`; a workflow ID alone is insufficient.
+- Restore requires verified credential and workflow references plus a fresh preview. Restoring
+  does not publish a workflow, but updating an already published target still affects that target.
+- New brief/evidence attachments must be sanitized UTF-8 text. Binary files are rejected;
+  existing attachments remain available. Secret detection is a safeguard, not a guarantee.
+- Monitoring reports observed execution history and any sync gaps. Log filters no longer remove
+  the minimal facts used for health and success rates.
+
+See the guide for binding commands, restore mappings, recovery instructions, and validation limits.
 
 ## What stays local
 

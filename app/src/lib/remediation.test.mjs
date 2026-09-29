@@ -9,6 +9,10 @@ process.env.WORKSPACE_ROOT = root
 process.env.DATABASE_PATH = path.join(root, 'data', 'fixture.db')
 process.env.CONTROL_CENTER_ENV_FILE = path.join(root, '.env.local')
 process.env.CONTROL_CENTER_BACKGROUND = 'off'
+// Exercise the API boundary with mocks even when release staging is offline.
+// Unmocked requests still fail closed and can never reach a real service.
+globalThis.fetch = async () => { throw new Error('Unmocked network request in fixture test.') }
+process.env.CONTROL_CENTER_OFFLINE = '0'
 const { db } = await import('./db.ts')
 const brief = await import('./brief.ts')
 const files = await import('./file-safety.ts')

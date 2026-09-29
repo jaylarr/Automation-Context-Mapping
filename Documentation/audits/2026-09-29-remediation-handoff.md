@@ -1,6 +1,19 @@
 # Audit remediation: implementation and operating guide
 
-Status: code implemented locally; production activation and real project-binding migration have not been performed.
+Status: activated on the owner's Windows Control Center on 2026-09-29; ten current exports were bound to their verified source installation. See the rollout evidence below. Earlier implementation-only evidence is retained as historical context.
+
+## Rollout evidence — 2026-09-29
+
+- Remote `main` was verified at `6f6f5c16307e261e29b531c75259e0873e0f200c`; its [GitHub CI run passed](https://github.com/jaylarr/n8n-agent-workspace/actions/runs/36587093613).
+- Created private SQLite/API-credential recovery snapshots before activation; snapshot integrity checks passed. The live database migrated from schema 5 to 6 and passed `PRAGMA integrity_check` afterward.
+- Active release: `1790695807563-fdce667e-6114-494b-bbb4-70c4ba877978`. Its isolated dependency install, typecheck, 30 tests, and production build passed. The first staging attempt correctly stopped before activation because its offline guard also blocked mocked API tests; fixture setup now denies unmocked fetches while allowing explicit mocks.
+- Transitioned the verified legacy Windows scheduled task to the release runtime. Both initial startup and a subsequent owned-runtime stop/start passed release-ID health checks. Failure-triggered live rollback was not exercised.
+- Overview, Projects, Workflows, Logs, Settings, Docs, and all four migrated project detail pages returned HTTP 200. This is HTTP verification, not visual/browser verification.
+- Bound ten top-level workflow exports across portfolio-booking-alerts (2), shared-utilities (2), site-voice-photo-doc-bot (4), and test-project-instant-quality-complaint (2). Each source URL/ID was independently recorded in its project AGENTS.md, and each portable content fingerprint matched a read-only fetch from that installation. Every source JSON remained byte-for-byte unchanged. Project changelogs record the binding migration; archived helper exports remain unbound historical files.
+- A primary-installation read-only sync fetched 93 executions (1 inserted, 92 updated); status was `ok`, with no pending cursor or recorded gap. This does not prove history already deleted upstream is complete. Existing monitoring settings were preserved; automatic export and automatic commits remain off.
+- No n8n workflows were edited, executed, restored, or published. The secondary installation was not used for binding migration or a manual sync; existing background monitoring continues under its saved configuration.
+- Top-level README and fixture-test correction are local, uncommitted changes beyond the pushed commit. Project bindings/changelog updates are local private-project changes. No commit or push was performed during rollout.
+- Remaining validation limits: native Linux/macOS service operation, visual/browser review, real restore execution, and live failure/rollback. Next.js emitted a nested-lockfile root-inference warning, and Node emitted its fixed-argument Windows shell deprecation warning; neither failed the build or live checks.
 
 This change addresses F1–F17 from the September 29 audit, with supporting regression tests, atomic writes, exact Git snapshot handling, and a private app-state snapshot helper. Optional product redesigns and dependency upgrades are not included.
 
@@ -21,7 +34,7 @@ This change addresses F1–F17 from the September 29 audit, with supporting regr
 | F11 | Metrics use facts before detailed-log filtering; rate denominator is success + error + crashed; Other has its own chart color | Metrics describe observed history, not an assertion that n8n retained every historical run; days are UTC |
 | F12 | Removal clears preferences, facts, health checkpoints, sync state and workflow cache; late requests cannot repopulate a removed installation | Re-added connections receive new IDs |
 | F13 | Hourly retention runs independently of n8n sync; null execution dates fall back to observation time; old facts compact into health checkpoints | Facts retain at least seven days for metrics. Pending runs remain available for reconciliation. Late outcomes crossing a checkpoint mark health history indeterminate |
-| F14 | Separate release directories contain source, dependencies and build; isolated staging uses npm ci; private verified SQLite snapshot precedes promotion; release-specific health and rollback | No running service was updated here. Legacy Windows supervision requires a deliberate one-time stop before installing the new runtime |
+| F14 | Separate release directories contain source, dependencies and build; isolated staging uses npm ci; private verified SQLite snapshot precedes promotion; release-specific health and rollback | Windows activation and owned-runtime restart verified in the rollout above; failure-triggered live rollback remains untested |
 | F15 | systemd command arguments quoted; launchd XML escaped; no arbitrary listener termination | Native macOS/Linux service startup remains unverified on this Windows machine |
 | F16 | Authenticated, streamed 64 KiB byte limit; malformed/aborted input handled; rejection logging rate-limited | Forwarded IP headers are not trusted as client identity |
 | F17 | Callback replacement preserves literal dollar text; plain-text briefs count as filled | Existing client briefs were not edited |
@@ -101,7 +114,7 @@ For a recovery drill, copy a snapshot database into a disposable directory, veri
 - Persistent gap messages mean historical coverage needs review. They do not mean the most recent HTTP request failed. Resetting a gap must be a deliberate operational decision after inspecting coverage.
 - Instance UIDs identify installations, not display names or mutable URLs. To connect a different installation, add a new connection; do not repurpose an existing connection's URL.
 
-## Validation evidence and limits
+## Initial implementation validation evidence and limits (before rollout)
 
 - 30 automated tests passed locally, including real temporary SQLite/Git fixtures, mocked multi-page n8n sync, late response removal, source-preserving restore/readback, uncertain-create blocking, release staging failure, and an independent WAL-backed snapshot restore.
 - Typecheck passed. An isolated optimized production build passed after allowing the existing Google Fonts download. Background jobs and remote n8n calls were disabled, and the database/workspace were disposable.
