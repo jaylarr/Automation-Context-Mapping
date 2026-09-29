@@ -83,7 +83,7 @@ export function RestoreButton({ slug, file, instances }: { slug: string; file: s
           onSubmit={(e) => {
             e.preventDefault()
             start(async () => {
-              const r = await restoreWorkflowAction(slug, file, instanceId, Boolean(preview?.published))
+              const r = await restoreWorkflowAction(slug, file, instanceId, Boolean(preview?.published), preview?.token ?? '')
               if (r?.ok) {
                 setResult(r)
                 setOpen(false)
@@ -97,7 +97,7 @@ export function RestoreButton({ slug, file, instances }: { slug: string; file: s
           </h2>
           <p className="small muted">
             Sends <code>workflows/{file}</code> back to n8n. It is <strong>never published</strong>: check its credentials in n8n, then publish there
-            yourself.
+            yourself. The API restores nodes, connections, name, and supported settings. Tags, description, and node groups remain in the backup.
           </p>
           {instances.length > 1 && (
             <div className="field">
@@ -129,13 +129,13 @@ export function RestoreButton({ slug, file, instances }: { slug: string; file: s
                   </>
                 ) : (
                   <>
-                    <strong>Creates</strong> &ldquo;{preview.name}&rdquo; on {preview.instance} (it isn&rsquo;t there). The file will be updated with the new id.
+                    <strong>Creates</strong> &ldquo;{preview.name}&rdquo; on {preview.instance} (it isn&rsquo;t there). Its target binding will record the new id.
                   </>
                 )}
               </p>
               {preview.credentials.length > 0 && (
                 <p className="muted">
-                  Credentials it uses: {preview.credentials.join(', ')}. They must exist on {preview.instance} with these names.
+                  Credentials it uses: {preview.credentials.join(', ')}. Target credential IDs must be verified on {preview.instance}; matching names alone is not sufficient.
                 </p>
               )}
               {preview.problem && <p style={{ color: 'var(--err)' }}>{preview.problem}</p>}

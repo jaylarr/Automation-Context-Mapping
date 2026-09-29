@@ -3,6 +3,7 @@ import path from 'node:path'
 import { MAX_FILE_BYTES, MAX_FILES_PER_UPLOAD, projectDir, safeName, uniqueName } from './brief'
 import { isInside } from './paths'
 import { findSecretInText } from './leak-scan'
+import { preflightFiles, requireSafeText, atomicWrite, writeNewFiles } from './file-safety'
 
 /**
  * Test results: "n8n workflows/<slug>/test-results/<run>/" holds one test run each: result.md
@@ -19,10 +20,10 @@ export type RunFile = { name: string; size: number; modified: string; image: boo
 export type TestRun = { id: string; title: string; date: string | null; outcome: Outcome; source: string | null; files: RunFile[]; modified: string }
 
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i
-const resultsDir = (slug: string) => path.join(projectDir(slug), RESULTS_DIR)
+const resultsDir = (slug: string) => path.join(/* turbopackIgnore: true */ projectDir(slug), RESULTS_DIR)
 
 function runDir(slug: string, id: string): string {
-  const dir = path.join(resultsDir(slug), id)
+  const dir = path.join(/* turbopackIgnore: true */ resultsDir(slug), id)
   if (!RUN_RE.test(id) || !fs.existsSync(dir)) throw new Error(`Test run not found: ${id}`)
   return dir
 }
@@ -40,10 +41,10 @@ export function listTestRuns(slug: string): TestRun[] {
     .readdirSync(root, { withFileTypes: true })
     .filter((d) => d.isDirectory() && RUN_RE.test(d.name))
     .map((d) => {
-      const dir = path.join(root, d.name)
+      const dir = path.join(/* turbopackIgnore: true */ root, d.name)
       let source: string | null = null
       try {
-        source = fs.readFileSync(path.join(dir, 'result.md'), 'utf8')
+        source = fs.readFileSync(path.join(/* turbopackIgnore: true */ dir, 'result.md'), 'utf8')
       } catch {
         /* files only */
       }
@@ -52,9 +53,9 @@ export function listTestRuns(slug: string): TestRun[] {
         .readdirSync(dir, { withFileTypes: true })
         .filter((f) => f.isFile() && !f.name.startsWith('.') && f.name !== 'result.md')
         .map((f) => {
-          const m = fs.statSync(path.join(dir, f.name)).mtime.toISOString()
+          const m = fs.statSync(path.join(/* turbopackIgnore: true */ dir, f.name)).mtime.toISOString()
           if (m > modified) modified = m
-          return { name: f.name, size: fs.statSync(path.join(dir, f.name)).size, modified: m, image: IMAGE.test(f.name) }
+          return { name: f.name, size: fs.statSync(path.join(/* turbopackIgnore: true */ dir, f.name)).size, modified: m, image: IMAGE.test(f.name) }
         })
         .sort((a, b) => a.name.localeCompare(b.name))
       const title = source?.match(/^# (.+)$/m)?.[1].trim() ?? d.name
@@ -78,15 +79,11 @@ async function writeFiles(dir: string, files: File[]): Promise<string[]> {
   if (real.length > MAX_FILES_PER_UPLOAD) throw new Error(`Up to ${MAX_FILES_PER_UPLOAD} files at a time.`)
   const tooBig = real.find((f) => f.size > MAX_FILE_BYTES)
   if (tooBig) throw new Error(`"${tooBig.name}" is larger than ${MAX_FILE_BYTES / 1024 / 1024} MB.`)
-  const saved: string[] = []
-  for (const f of real) {
-    let name = safeName(f.name)
-    if (name === 'result.md') name = 'result (upload).md'
-    name = uniqueName(dir, name)
-    fs.writeFileSync(path.join(dir, name), Buffer.from(await f.arrayBuffer()))
-    saved.push(name)
-  }
-  return saved
+  const checked = await preflightFiles(real)
+  return writeNewFiles(dir, checked.map((f) => {
+    const name = safeName(f.name)
+    return { name: name === 'result.md' ? 'result (upload).md' : name, bytes: f.bytes }
+  }))
 }
 
 function secretWarning(text: string): string | null {
@@ -104,13 +101,15 @@ export async function createTestRun(
   const title = oneLine(input.title)
   if (!title) throw new Error('Give the test a short name.')
   if (input.notes.length > MAX_NOTE_CHARS) throw new Error('The notes are too long.')
+  requireSafeText(JSON.stringify({ title: input.title, workflow: input.workflow, notes: input.notes }))
+  await preflightFiles(input.files)
   const root = resultsDir(slug)
   fs.mkdirSync(root, { recursive: true })
   const date = new Date().toISOString().slice(0, 10)
   const base = `${date}-${kebab(title) || 'test'}`
   let id = base
-  for (let i = 2; fs.existsSync(path.join(root, id)); i++) id = `${base}-${i}`
-  const dir = path.join(root, id)
+  for (let i = 2; fs.existsSync(path.join(/* turbopackIgnore: true */ root, id)); i++) id = `${base}-${i}`
+  const dir = path.join(/* turbopackIgnore: true */ root, id)
   fs.mkdirSync(dir)
   try {
     const saved = await writeFiles(dir, input.files)
@@ -131,7 +130,7 @@ export async function createTestRun(
       '',
       ...(saved.length ? ['## Evidence', '', ...saved.map((f) => `- \`${f}\``), ''] : []),
     ].join('\n')
-    fs.writeFileSync(path.join(dir, 'result.md'), md, 'utf8')
+    atomicWrite(path.join(/* turbopackIgnore: true */ dir, 'result.md'), md)
   } catch (e) {
     fs.rmSync(dir, { recursive: true, force: true })
     throw e
@@ -143,13 +142,16 @@ export async function createTestRun(
 export async function addToTestRun(slug: string, id: string, input: { notes: string; files: File[] }): Promise<{ saved: string[]; warning: string | null }> {
   const dir = runDir(slug, id)
   if (input.notes.length > MAX_NOTE_CHARS) throw new Error('The note is too long.')
+  requireSafeText(input.notes)
   const saved = await writeFiles(dir, input.files)
   const note = input.notes.replace(/\r\n/g, '\n').trim()
   if (note || saved.length) {
     const lines = ['', `## Added ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC (owner)`, '']
     if (note) lines.push(note, '')
     if (saved.length) lines.push(...saved.map((f) => `- \`${f}\``), '')
-    fs.appendFileSync(path.join(dir, 'result.md'), lines.join('\n'), 'utf8')
+    const file = path.join(/* turbopackIgnore: true */ dir, 'result.md')
+    try { atomicWrite(file, (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '') + lines.join('\n')) }
+    catch (e) { for (const name of saved) fs.unlinkSync(path.join(/* turbopackIgnore: true */ dir, name)); throw e }
   }
   return { saved, warning: secretWarning(note) }
 }
@@ -162,7 +164,7 @@ export function testFilePath(slug: string, id: string, name: string): string | n
   } catch {
     return null
   }
-  const p = path.join(dir, name)
+  const p = path.join(/* turbopackIgnore: true */ dir, name)
   if (name !== path.basename(name) || name.startsWith('.') || !isInside(dir, p)) return null
   return fs.existsSync(p) && fs.statSync(p).isFile() ? p : null
 }

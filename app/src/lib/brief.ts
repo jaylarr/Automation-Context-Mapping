@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { DOCS_DIR, PROJECTS_DIR, SLUG_RE, isInside } from './paths'
 import { findSecretInText } from './leak-scan'
+import { atomicWrite, preflightFiles, requireSafeText, writeNewFiles } from './file-safety'
 
 /**
  * The client brief: "n8n workflows/<slug>/client-brief/" holds what the client asked for, in their
@@ -24,17 +25,21 @@ export type Brief = {
 }
 
 export function projectDir(slug: string): string {
-  const dir = path.join(PROJECTS_DIR, slug)
-  if (!SLUG_RE.test(slug) || !fs.existsSync(path.join(dir, 'README.md'))) throw new Error(`Unknown project: ${slug}`)
+  const dir = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, slug)
+  if (!SLUG_RE.test(slug) || !fs.existsSync(path.join(/* turbopackIgnore: true */ dir, 'README.md'))) throw new Error(`Unknown project: ${slug}`)
   return dir
 }
 
-const briefFile = (dir: string) => path.join(dir, BRIEF_DIR, 'brief.md')
-const filesDir = (dir: string) => path.join(dir, BRIEF_DIR, 'files')
+const briefFile = (dir: string) => path.join(/* turbopackIgnore: true */ dir, BRIEF_DIR, 'brief.md')
+const filesDir = (dir: string) => path.join(/* turbopackIgnore: true */ dir, BRIEF_DIR, 'files')
 
 /** True when any section other than "Attachments" has text beyond the template's comments. */
 export function isBriefFilled(source: string): boolean {
   const text = source.replace(/<!--[\s\S]*?-->/g, '')
+  const preamble = text.split(/^## /m)[0]
+  const content = /^# Client brief(?:\s|$)/.test(preamble) ? preamble.replace(/^# Client brief[^\n]*$/m, '').replace(/^\|.*\|\s*$/gm, '').trim() : preamble.trim()
+  if (content) return true
+  if (!/^## /m.test(text)) return false
   return text
     .split(/^## /m)
     .slice(1)
@@ -60,7 +65,7 @@ function listFiles(dir: string): BriefFile[] {
     .readdirSync(fdir, { withFileTypes: true })
     .filter((d) => d.isFile() && !d.name.startsWith('.'))
     .map((d) => {
-      const st = fs.statSync(path.join(fdir, d.name))
+      const st = fs.statSync(path.join(/* turbopackIgnore: true */ fdir, d.name))
       return { name: d.name, size: st.size, modified: st.mtime.toISOString() }
     })
     .sort((a, b) => a.name.localeCompare(b.name))
@@ -85,7 +90,7 @@ export function readBrief(slug: string): Brief {
 export function briefTemplate(input: { name: string; client: string }): string {
   let tpl: string
   try {
-    tpl = fs.readFileSync(path.join(DOCS_DIR, 'templates', 'client-brief.md'), 'utf8')
+    tpl = fs.readFileSync(path.join(/* turbopackIgnore: true */ DOCS_DIR, 'templates', 'client-brief.md'), 'utf8')
   } catch {
     tpl = '# Client brief — {{PROJECT_NAME}}\n\n## What the client asked for\n\n'
   }
@@ -100,15 +105,16 @@ export function withAskedText(source: string, text: string): string {
   const t = text.replace(/\r\n/g, '\n').trim()
   if (!t) return source
   const re = /(^## What the client asked for[^\n]*\n)(\s*<!--[\s\S]*?-->\s*\n)?/m
-  return re.test(source) ? source.replace(re, `$1\n${t}\n\n`) : `${source.trimEnd()}\n\n## What the client asked for\n\n${t}\n`
+  return re.test(source) ? source.replace(re, (_match, heading: string) => `${heading}\n${t}\n\n`) : `${source.trimEnd()}\n\n## What the client asked for\n\n${t}\n`
 }
 
 /** Writes brief.md. Returns a warning when the text looks like it contains a secret. */
 export function saveBrief(slug: string, source: string): { warning: string | null } {
   const dir = projectDir(slug)
   if (source.length > MAX_BRIEF_CHARS) throw new Error(`The brief is too long (max ${MAX_BRIEF_CHARS.toLocaleString()} characters).`)
+  requireSafeText(source)
   fs.mkdirSync(filesDir(dir), { recursive: true })
-  fs.writeFileSync(briefFile(dir), source.replace(/\r\n/g, '\n'), 'utf8')
+  atomicWrite(briefFile(dir), source.replace(/\r\n/g, '\n'))
   const secret = findSecretInText(source)
   return { warning: secret ? `Saved, but it looks like it contains ${secret}. Remove it and rotate the key: secrets belong in n8n credentials only.` : null }
 }
@@ -121,16 +127,16 @@ export function safeName(name: string): string {
     .replace(/^[.\s-]+/, '')
     .trim()
     .slice(-120)
-  return clean || 'file'
+  return /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(clean) ? `upload-${clean}` : clean.replace(/[. ]+$/, '') || 'file'
 }
 
 export function uniqueName(fdir: string, name: string): string {
-  if (!fs.existsSync(path.join(fdir, name))) return name
+  if (!fs.existsSync(path.join(/* turbopackIgnore: true */ fdir, name))) return name
   const ext = path.extname(name)
   const stem = name.slice(0, name.length - ext.length)
   for (let i = 2; ; i++) {
     const next = `${stem} (${i})${ext}`
-    if (!fs.existsSync(path.join(fdir, next))) return next
+    if (!fs.existsSync(path.join(/* turbopackIgnore: true */ fdir, next))) return next
   }
 }
 
@@ -142,14 +148,9 @@ export async function saveBriefFiles(slug: string, files: File[]): Promise<strin
   const tooBig = real.find((f) => f.size > MAX_FILE_BYTES)
   if (tooBig) throw new Error(`"${tooBig.name}" is larger than ${MAX_FILE_BYTES / 1024 / 1024} MB.`)
   const fdir = filesDir(dir)
+  const checked = await preflightFiles(real)
   fs.mkdirSync(fdir, { recursive: true })
-  const saved: string[] = []
-  for (const f of real) {
-    const name = uniqueName(fdir, safeName(f.name))
-    fs.writeFileSync(path.join(fdir, name), Buffer.from(await f.arrayBuffer()))
-    saved.push(name)
-  }
-  return saved
+  return writeNewFiles(fdir, checked.map((f) => ({ name: safeName(f.name), bytes: f.bytes })))
 }
 
 /** Absolute path of one listed file, or null (no path tricks, no dotfiles). */
@@ -161,7 +162,7 @@ export function briefFilePath(slug: string, name: string): string | null {
     return null
   }
   const fdir = filesDir(dir)
-  const p = path.join(fdir, name)
+  const p = path.join(/* turbopackIgnore: true */ fdir, name)
   if (name !== path.basename(name) || name.startsWith('.') || !isInside(fdir, p)) return null
   return fs.existsSync(p) && fs.statSync(p).isFile() ? p : null
 }

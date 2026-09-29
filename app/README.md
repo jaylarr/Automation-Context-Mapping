@@ -14,6 +14,12 @@ cloud database.
 | **Docs & skills** | `AGENTS.md`, `Documentation/`, templates, and every skill, rendered with search |
 | **Settings** | **n8n instances** (add/edit/test/sync/remove any number of n8n servers; keys go to `.env.local` as `N8N_API_KEY__<ID>`), auto-sync interval, log retention, event-inbox token, **Backups** (scheduled auto-export, optional auto-commit), **Recently deleted** projects (restore within 30 days), app maintenance, DB info |
 
+## Remediation and rollout
+
+See [the implementation and operating guide](../Documentation/audits/2026-09-29-remediation-handoff.md) before the first upgrade. The new release runtime stages complete dependency/build directories, creates a private state snapshot, verifies the release ID, and retains the previous release. Native service transitions still need platform validation. Legacy workflow exports require explicit source-installation bindings; they are not migrated by guessing IDs.
+
+Use Node **22.18 or later**. New attachments must be sanitized UTF-8 text; binary originals stay outside the project repository. Unsupported content is rejected before saving.
+
 ## Run it
 
 ### As a regular app (recommended)
@@ -45,7 +51,7 @@ Start-menu icon. Right-click the icon for shortcuts to Logs, Projects, and New p
 **Restart / update without a terminal:** Settings → **App maintenance**.
 - **Restart**: about 5 seconds offline, and the page reloads by itself.
 - **Update & rebuild**: after code changes. The new version builds while the current one keeps
-  running, then swaps in (about 5 seconds offline). A failed build changes nothing, and a new version
+  running, then promotes the separately staged release (downtime depends on startup and verification). A failed build changes nothing, and a new version
   that doesn't start is rolled back automatically.
 
 Both ask for confirmation first. Their output is in the **Maintenance log** on the same card.
@@ -72,8 +78,7 @@ npm install
 npm run dev      # http://127.0.0.1:3100 with hot reload. Stop the background app first (control-center.ps1 stop)
 ```
 
-> `better-sqlite3` is a native module. If `npm install` reports blocked install scripts and the app
-> can't open the database, run `npm approve-scripts better-sqlite3` and reinstall.
+> The committed `.npmrc` disables lifecycle scripts; this version of `better-sqlite3` ships prebuilt binaries. Use `npm ci` and verify the installed platform binary with the test suite. Do not enable arbitrary install scripts as a troubleshooting shortcut.
 
 ## Configuration
 
@@ -90,8 +95,8 @@ can also edit that file by hand:
 
 | Variable | Needed for | Notes |
 |---|---|---|
-| `N8N_BASE_URL` | Execution sync | e.g. `https://n8n.example.com`, no trailing slash |
-| `N8N_API_KEY` | Execution sync | n8n → Settings → n8n API. The app **reads** workflows and executions. Its only writes are **publish / unpublish** (always confirmed), which need the `workflow:activate` / `workflow:deactivate` scopes |
+| `N8N_BASE_URL` | Legacy migration only | New connections store URLs in SQLite |
+| `N8N_API_KEY__<ID>` | Instance connection | Per-connection key. Reads workflows/executions; explicit restore and publish/unpublish require their corresponding API permissions |
 | `INGEST_TOKEN` | Event inbox | A random secret: `node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"` |
 | `WORKSPACE_ROOT` | optional | Defaults to the folder above `app/` |
 | `DATABASE_PATH` | optional | Defaults to `app/data/control-center.db` |
@@ -142,15 +147,12 @@ sending history to a remote stays a manual step.
 
 On a project page, the **⤒** button on each workflow row sends that saved JSON back to n8n:
 
-- Pick the instance (with several, nothing is preselected). The dialog asks n8n first and says what
-  will happen: **update** the workflow with the same id, or **create** it when it's missing (the file
-  then gets the new id, so Import and Restore keep matching).
-- It's **never published**. If the target is published, restoring can change what runs live, so you
-  must type `restore` to confirm.
-- It lists the credential names the workflow needs on that instance, and refuses a file with a secret
-  typed into a node. Only settings the n8n API accepts are sent (tags aren't).
-- Each restore adds a CHANGELOG line and an App activity entry. n8n keeps the replaced version in its
-  version history.
+- Pick the target installation and review the expiring preview. Source and target are matched by explicit installation-qualified bindings, never bare workflow ID or name.
+- Credential references require manually verified target mappings. Error/subworkflow references are checked on the target. Unresolved mappings block the write.
+- The source export ID stays unchanged; a created target ID is recorded in the binding manifest.
+- A published target requires the typed confirmation. Restore does not call publish, but it does not unpublish an already-live workflow.
+- Source/target changes invalidate the preview. Remote readback verifies the payload. Uncertain outcomes leave a durable journal and block automatic retries; follow the operating guide to reconcile them.
+- Tags, description and node groups remain in the backup; the public-API payload sends name, nodes, connections and supported settings.
 
 ## Deleting a project
 
@@ -167,7 +169,7 @@ them change anything in n8n:
 
 | Setting | Effect |
 |---|---|
-| **What gets logged** | All runs (default) · Errors only · Success only · Stop tracking. Applied at sync, so filtered runs are never stored |
+| **What gets logged** | All runs (default) · Errors only · Success only · Stop tracking. Controls detailed logs; minimal outcome facts still support health and metrics |
 | **Ignore test runs** | Skips runs started by hand from the n8n editor (execution mode `manual`) |
 | **Also remove already-logged runs** | One-off cleanup of stored runs that the new setting would no longer log |
 | **Keep this workflow's logs for N days** | Overrides the global retention (Settings) for this workflow only |
@@ -183,7 +185,7 @@ workflow without one gets a "No error workflow" badge.
 
 **Publish / unpublish in n8n** is in the dialog's "In n8n" section and on each row's status badge,
 always behind a confirmation. Unpublishing turns the workflow's triggers off (nothing is deleted);
-publishing turns them on. These are the only actions in the app that write to n8n, and each one is
+publishing turns them on. Together with explicit Restore, these actions write to n8n, and each one is
 recorded in the activity log. If n8n refuses (e.g. a credential is missing), the dialog shows why.
 
 ## Workflow list cache
@@ -226,3 +228,11 @@ app/
 Stack: Next.js 16 (App Router, Turbopack), React 19, TypeScript, better-sqlite3, lucide-react,
 react-markdown. `npm run typecheck` checks types. App icons are generated from one SVG by
 `node scripts/make-icons.mjs` (in `app/`).
+
+## Monitoring coverage and retention
+
+Sync persists its pagination cursor and reconciles unfinished executions outside the latest page. Backfill and missing-checkpoint gaps are visible in instance status. Success rate uses observed success/error/crashed outcomes before detail filtering; running, waiting, canceled and unknown outcomes are separate. Chart days are UTC. Ignore-manual and exclude-from-stats preferences still apply.
+
+Retention runs independently each hour. Detailed logs follow global/per-workflow settings, including null-date rows and projects in trash. Minimal facts retain at least seven days for metrics, then compact into health checkpoints. Pending runs remain for reconciliation; a late outcome crossing a checkpoint marks historical health indeterminate rather than inventing a streak.
+
+Git commits scan the exact candidate blobs, reject stale previews, and preserve unrelated staging. Unsupported binary/non-UTF-8 content fails closed. Repositories requiring hooks or signing use manual commits. State snapshots may contain credentials and are not encrypted; keep `app/data/` private.

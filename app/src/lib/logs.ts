@@ -165,6 +165,7 @@ export function insertEvent(e: {
 
 export function pruneOlderThan(days: number): { activity: number; events: number; executions: number } {
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString()
+  compactExecutionFacts(days)
   return {
     activity: db.prepare(`DELETE FROM activity WHERE created_at < ?`).run(cutoff).changes,
     events: db.prepare(`DELETE FROM events WHERE received_at < ?`).run(cutoff).changes,
@@ -172,11 +173,40 @@ export function pruneOlderThan(days: number): { activity: number; events: number
   }
 }
 
+/** Keep at least seven days for dashboard metrics; compact older outcomes into a small health checkpoint. */
+function compactExecutionFacts(days: number): void {
+  const workflows = db.prepare('SELECT DISTINCT instance_id, workflow_id FROM execution_facts').all() as { instance_id: string; workflow_id: string }[]
+  db.transaction(() => {
+    for (const w of workflows) {
+      const p = db.prepare('SELECT retention_days, ignore_manual FROM workflow_prefs WHERE instance_id=? AND workflow_id=?').get(w.instance_id,w.workflow_id) as { retention_days: number | null; ignore_manual: number } | undefined
+      const cutoff = new Date(Date.now() - Math.max(7,p?.retention_days ?? days) * 86400000).toISOString()
+      const rows = db.prepare(`SELECT id,CASE WHEN started_at IS NULL THEN 'unknown' ELSE status END status,mode,COALESCE(started_at,first_seen_at,observed_at) at FROM execution_facts
+        WHERE instance_id=? AND workflow_id=? AND COALESCE(started_at,first_seen_at,observed_at) < ?
+        AND status NOT IN ('running','waiting','new','unknown') ORDER BY at,id`).all(w.instance_id,w.workflow_id,cutoff) as {id:string;status:string;mode:string|null;at:string}[]
+      if (!rows.length) continue
+      const prev = db.prepare('SELECT * FROM health_carry WHERE instance_id=? AND workflow_id=?').get(w.instance_id,w.workflow_id) as { through_at:string; fail_streak:number; ignore_manual:number; last_success_at:string|null } | undefined
+      let lastSuccess = prev?.last_success_at ?? null
+      let streak = prev?.ignore_manual === (p?.ignore_manual ?? 0) ? prev.fail_streak : 0
+      for (const r of rows) {
+        if (prev && r.at <= prev.through_at) continue
+        if (p?.ignore_manual && r.mode === 'manual') continue
+        if (r.status === 'success') lastSuccess = r.at
+        streak = ['error','crashed'].includes(r.status) ? streak + 1 : 0
+      }
+      const through = [prev?.through_at ?? '', rows[rows.length-1].at].sort().at(-1)!
+      db.prepare(`INSERT INTO health_carry VALUES(?,?,?,?,?,?) ON CONFLICT(instance_id,workflow_id) DO UPDATE SET
+        through_at=excluded.through_at,fail_streak=excluded.fail_streak,ignore_manual=excluded.ignore_manual,last_success_at=excluded.last_success_at`).run(w.instance_id,w.workflow_id,through,streak,p?.ignore_manual ?? 0,lastSuccess)
+      const remove = db.prepare('DELETE FROM execution_facts WHERE instance_id=? AND id=?')
+      for (const r of rows) remove.run(w.instance_id,r.id)
+    }
+  })()
+}
+
 /** Global retention, except workflows with their own retention (Workflows → ⚙), which use theirs. */
 function pruneExecutions(globalCutoff: string): number {
   let n = db
     .prepare(
-      `DELETE FROM executions WHERE started_at < ? AND NOT EXISTS (SELECT 1 FROM workflow_prefs wp
+      `DELETE FROM executions WHERE COALESCE(started_at, first_seen_at, synced_at) < ? AND NOT EXISTS (SELECT 1 FROM workflow_prefs wp
          WHERE wp.instance_id = executions.instance_id AND wp.workflow_id = executions.workflow_id AND wp.retention_days IS NOT NULL)`,
     )
     .run(globalCutoff).changes
@@ -185,7 +215,7 @@ function pruneExecutions(globalCutoff: string): number {
     workflow_id: string
     retention_days: number
   }[]
-  const del = db.prepare('DELETE FROM executions WHERE instance_id = ? AND workflow_id = ? AND started_at < ?')
+  const del = db.prepare('DELETE FROM executions WHERE instance_id = ? AND workflow_id = ? AND COALESCE(started_at, first_seen_at, synced_at) < ?')
   for (const p of own) n += del.run(p.instance_id, p.workflow_id, new Date(Date.now() - p.retention_days * 86_400_000).toISOString()).changes
   return n
 }
@@ -204,7 +234,7 @@ export function executionsPerDay(days: number, instance: string | null = null): 
               SUM(status = 'success') success,
               SUM(status IN ('error','crashed')) error,
               SUM(status NOT IN ('success','error','crashed')) other
-       FROM executions e WHERE started_at >= ? AND (? IS NULL OR instance_id = ?) AND ${NOT_EXCLUDED_SQL} GROUP BY day`,
+       FROM execution_facts e WHERE started_at >= ? AND (? IS NULL OR instance_id = ?) AND ${NOT_EXCLUDED_SQL} GROUP BY day`,
     )
     .all(since.toISOString(), instance, instance) as DayBucket[]
   const byDay = new Map(rows.map((r) => [r.day, r]))
@@ -221,13 +251,13 @@ export function overviewCounts(instance: string | null = null) {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
   const one = <T>(sql: string, ...p: unknown[]) => db.prepare(sql).get(...p) as T
   const exec24 = one<{ total: number; errors: number }>(
-    `SELECT COUNT(*) total, COALESCE(SUM(status IN ('error','crashed')),0) errors FROM executions e WHERE started_at >= ? AND (? IS NULL OR instance_id = ?) AND ${NOT_EXCLUDED_SQL}`,
+    `SELECT COUNT(*) total, COALESCE(SUM(status IN ('error','crashed')),0) errors FROM execution_facts e WHERE started_at >= ? AND (? IS NULL OR instance_id = ?) AND ${NOT_EXCLUDED_SQL}`,
     dayAgo,
     instance,
     instance,
   )
   const exec7 = one<{ total: number; ok: number }>(
-    `SELECT COUNT(*) total, COALESCE(SUM(status = 'success'),0) ok FROM executions e WHERE started_at >= ? AND (? IS NULL OR instance_id = ?) AND ${NOT_EXCLUDED_SQL}`,
+    `SELECT COALESCE(SUM(status IN ('success','error','crashed')),0) total, COALESCE(SUM(status = 'success'),0) ok FROM execution_facts e WHERE started_at >= ? AND (? IS NULL OR instance_id = ?) AND ${NOT_EXCLUDED_SQL}`,
     weekAgo,
     instance,
     instance,

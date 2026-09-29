@@ -56,7 +56,9 @@ function stable(v) {
 
 /** Only the parts that define the workflow's behavior and layout (key order doesn't matter). */
 export function fingerprint(w) {
-  return stable({ name: w.name, nodes: w.nodes, connections: w.connections, settings: w.settings ?? {} })
+  const portable = sanitizeWorkflow(w)
+  delete portable.id
+  return stable(portable)
 }
 
 const SECRET_FIELD = /^(api[_-]?key|apikey|access[_-]?token|token|secret|client[_-]?secret|password|passwd|authorization)$/i
@@ -65,10 +67,12 @@ const SECRET_FIELD = /^(api[_-]?key|apikey|access[_-]?token|token|secret|client[
 export function findHardcodedSecret(w) {
   const walk = (v, key) => {
     if (typeof v === 'string') {
-      if (v.startsWith('=')) return null // expressions are fine (values come from elsewhere)
       const hit = findSecretInText(v)
       if (hit) return hit
-      if (key && SECRET_FIELD.test(key) && v.length >= 12 && !/\s/.test(v)) return `a value in "${key}"`
+      // Expressions can contain pasted literals. Only exempt actual dynamic references from
+      // the field-name heuristic, after checking known token formats above.
+      if (/^=\{\{\s*\$(?:json(?:\.[A-Za-z_$][\w$]*)+|\(['"][^'"]+['"]\)\.item\.json(?:\.[A-Za-z_$][\w$]*)+)\s*\}\}$/.test(v)) return null
+      if (key && SECRET_FIELD.test(key) && v.trim().length >= 12) return `a value in "${key}"`
       return null
     }
     if (Array.isArray(v)) {
@@ -88,10 +92,10 @@ export function findHardcodedSecret(w) {
     return null
   }
   for (const n of w.nodes ?? []) {
-    const hit = walk(n.parameters ?? {}, null)
-    if (hit) return `${n.name}: ${hit}`
+    const hit = walk(n, null)
+    if (hit) return `${findSecretInText(n.name ?? '') ? 'Workflow node' : n.name}: ${hit}`
   }
-  return null
+  return walk({ name: w.name, description: w.description, settings: w.settings, tags: w.tags, nodeGroups: w.nodeGroups }, null)
 }
 
 /** Checks the workflow can be imported: every connection names an existing node. Returns problems. */

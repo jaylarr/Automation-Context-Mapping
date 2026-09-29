@@ -69,7 +69,7 @@ export function ExecChart({ data }: { data: Bucket[] }) {
           const cx = PAD.left + band * i + band / 2
           const x = cx - colW / 2
           // successful (+ other) at the bottom, failures stacked on top
-          const okV = d.success + d.other
+          const okV = d.success
           const okTop = y(okV)
           const errTop = y(okV + d.error)
           const hasErr = d.error > 0
@@ -88,6 +88,7 @@ export function ExecChart({ data }: { data: Bucket[] }) {
                   fill="var(--chart-err)"
                 />
               )}
+              {d.other > 0 && <rect x={x} y={y(okV + d.error + d.other)} width={colW} height={Math.max(0, errTop - y(okV + d.error + d.other))} fill="var(--text-3)" />}
               {showLabel && (
                 <text className="axis" x={cx} y={H - 6} textAnchor="middle">
                   {fmtDay(d.day)}
@@ -100,6 +101,10 @@ export function ExecChart({ data }: { data: Bucket[] }) {
                 width={band}
                 height={innerH}
                 fill="transparent"
+                tabIndex={0}
+                aria-label={`${d.day} UTC: ${d.success} successful, ${d.error} failed, ${d.other} other`}
+                onFocus={() => setHover(i)}
+                onBlur={() => setHover(null)}
                 onMouseEnter={() => setHover(i)}
                 onMouseLeave={() => setHover(null)}
               />
@@ -145,7 +150,7 @@ export function ExecChart({ data }: { data: Bucket[] }) {
           <table className="table">
             <thead>
               <tr>
-                <th>Day</th>
+                <th>Day (UTC)</th>
                 <th className="num">Successful</th>
                 <th className="num">Failed</th>
                 <th className="num">Other</th>

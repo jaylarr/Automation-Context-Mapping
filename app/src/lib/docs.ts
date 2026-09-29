@@ -32,23 +32,23 @@ export function listDocs(): DocEntry[] {
     out.push({ id, title: titleOf(abs, safeRead(abs)), group })
   }
   for (const f of ROOT_FILES) {
-    const abs = path.join(WORKSPACE_ROOT, f)
+    const abs = path.join(/* turbopackIgnore: true */ WORKSPACE_ROOT, f)
     if (fs.existsSync(abs)) add(abs, 'Workspace')
   }
   if (fs.existsSync(DOCS_DIR)) {
-    for (const f of fs.readdirSync(DOCS_DIR).sort()) if (f.endsWith('.md')) add(path.join(DOCS_DIR, f), 'Documentation')
-    const tpl = path.join(DOCS_DIR, 'templates')
+    for (const f of fs.readdirSync(DOCS_DIR).sort()) if (f.endsWith('.md')) add(path.join(/* turbopackIgnore: true */ DOCS_DIR, f), 'Documentation')
+    const tpl = path.join(/* turbopackIgnore: true */ DOCS_DIR, 'templates')
     if (fs.existsSync(tpl))
-      for (const f of fs.readdirSync(tpl).sort()) if (f.endsWith('.md')) add(path.join(tpl, f), 'Templates')
+      for (const f of fs.readdirSync(tpl).sort()) if (f.endsWith('.md')) add(path.join(/* turbopackIgnore: true */ tpl, f), 'Templates')
   }
   if (fs.existsSync(SKILLS_DIR)) {
-    const index = path.join(SKILLS_DIR, 'INDEX.md')
+    const index = path.join(/* turbopackIgnore: true */ SKILLS_DIR, 'INDEX.md')
     if (fs.existsSync(index)) add(index, 'Skills')
     for (const d of fs.readdirSync(SKILLS_DIR, { withFileTypes: true })) {
       if (!d.isDirectory() || d.name.startsWith('_')) continue
-      const skill = path.join(SKILLS_DIR, d.name, 'SKILL.md')
+      const skill = path.join(/* turbopackIgnore: true */ SKILLS_DIR, d.name, 'SKILL.md')
       if (!fs.existsSync(skill)) continue
-      const custom = !fs.existsSync(path.join(SKILLS_DIR, d.name, 'SOURCE.md'))
+      const custom = !fs.existsSync(path.join(/* turbopackIgnore: true */ SKILLS_DIR, d.name, 'SOURCE.md'))
       add(skill, custom ? 'Skills: custom' : 'Skills: vendored')
     }
   }
@@ -79,7 +79,7 @@ export function searchDocs(q: string, limit = 30): SearchHit[] {
   if (terms.join('').length < 2) return []
   const hits: SearchHit[] = []
   for (const d of listDocs()) {
-    const text = safeRead(path.join(WORKSPACE_ROOT, d.id))
+    const text = safeRead(path.join(/* turbopackIgnore: true */ WORKSPACE_ROOT, d.id))
     if (!matchesQuery(`${d.title} ${d.id} ${text}`, terms)) continue
     const i = text.toLowerCase().indexOf(terms[0])
     const at = Math.max(0, i)

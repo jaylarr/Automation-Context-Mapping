@@ -32,7 +32,7 @@ export async function runAutoExport(trigger: 'auto' | 'manual'): Promise<AutoExp
         if (!res.ok) result.skipped.push(`${r.name}: ${res.message}`)
         else if (res.message !== 'Already up to date.' && res.project && res.file) {
           result.exported.push(`${res.project}/${res.file}`)
-          touched.set(res.project, [...(touched.get(res.project) ?? []), `workflows/${res.file}`, 'documentation/CHANGELOG.md'])
+          touched.set(res.project, [...(touched.get(res.project) ?? []), `workflows/${res.file}`, 'documentation/CHANGELOG.md', 'documentation/workflow-bindings.json'])
         }
       } catch (e) {
         result.skipped.push(`${r.name}: ${e instanceof Error ? e.message : String(e)}`)

@@ -1,6 +1,7 @@
 'use server'
 
 import { randomBytes } from 'node:crypto'
+import { requireSafeText, preflightFiles } from '@/lib/file-safety'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { logActivity } from '@/lib/logs'
@@ -51,6 +52,8 @@ export async function createProjectAction(_prev: ActionState, form: FormData): P
   if (briefText.length > MAX_BRIEF_CHARS) return { ok: false, message: 'The brief is too long.' }
   if (files.some((f) => f.size > MAX_FILE_BYTES)) return { ok: false, message: `Each file must be under ${MAX_FILE_BYTES / 1024 / 1024} MB.` }
   try {
+    requireSafeText(JSON.stringify({ slug, client, purpose, briefText }))
+    await preflightFiles(files)
     await createProject({ slug, client, purpose, website })
   } catch (e) {
     const message = e instanceof Error ? e.message.split('\n')[0] : 'Could not create the project.'
@@ -168,9 +171,9 @@ export async function deleteProjectAction(slug: string, confirmation: string): P
 
 // ------------------------------------------------------------------ git backups (project repos; never pushes)
 
-export async function commitProjectAction(slug: string, message: string, changelogLine: string): Promise<ActionState> {
+export async function commitProjectAction(slug: string, message: string, changelogLine: string, snapshot: string): Promise<ActionState> {
   try {
-    const { sha, files } = await commitProject(slug, message, { changelogLine })
+    const { sha, files } = await commitProject(slug, message, { changelogLine, snapshot: snapshot || 'missing-preview' })
     logActivity({ level: 'success', action: 'project.commit', message: `Committed ${files.length} file(s) in ${slug} (${sha})`, project: slug, meta: { sha, message, files } })
     revalidatePath('/', 'layout')
     return { ok: true, message: `Committed ${files.length} file${files.length === 1 ? '' : 's'} (${sha}).` }
@@ -225,9 +228,9 @@ export async function previewRestoreAction(slug: string, file: string, instanceI
   }
 }
 
-export async function restoreWorkflowAction(slug: string, file: string, instanceId: string, confirmPublished: boolean): Promise<ActionState> {
+export async function restoreWorkflowAction(slug: string, file: string, instanceId: string, confirmPublished: boolean, token: string): Promise<ActionState> {
   try {
-    const r = await restoreWorkflow(slug, file, instanceId, confirmPublished)
+    const r = await restoreWorkflow(slug, file, instanceId, confirmPublished, token)
     logActivity({
       level: 'warn',
       action: 'workflow.restore',
@@ -240,7 +243,7 @@ export async function restoreWorkflowAction(slug: string, file: string, instance
       ok: true,
       message:
         r.action === 'create'
-          ? `Created "${r.name}" on ${r.instance} (id ${r.id}, not published). The file now uses the new id. Check its credentials in n8n.`
+          ? `Created "${r.name}" on ${r.instance} (id ${r.id}, not published). The target binding now records the new id; the source file is unchanged. Check its credentials in n8n.`
           : `Updated "${r.name}" on ${r.instance}. Check its credentials in n8n, then publish there if needed.`,
     }
   } catch (e) {

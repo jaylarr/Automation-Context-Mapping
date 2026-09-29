@@ -65,7 +65,7 @@ test('fingerprint ignores key order and instance fields', () => {
   const b = JSON.parse(JSON.stringify(a))
   b.nodes = b.nodes.map((n) => Object.fromEntries(Object.entries(n).reverse()))
   assert.equal(fingerprint(a), fingerprint(b))
-  assert.equal(fingerprint(a), fingerprint({ ...a, description: 'changed', tags: [] }))
+  assert.notEqual(fingerprint(a), fingerprint({ ...a, description: 'changed', tags: [] }))
 })
 
 test('fingerprint changes when behavior changes', () => {
@@ -144,4 +144,11 @@ test('slugifyName drops the project prefix and accents', () => {
   assert.equal(slugifyName('[acme-lead-intake] Qualify inbound lead'), 'qualify-inbound-lead')
   assert.equal(slugifyName('Überprüfe Straße & Café'), 'uberprufe-strasse-cafe')
   assert.equal(slugifyName('[x] !!!'), 'workflow')
+})
+
+test('known secrets inside expressions, descriptions and notes are rejected', () => {
+  const token = fake('sk-', 'x'.repeat(25))
+  for (const change of [w => { w.nodes[0].parameters.value = `={{ "${token}" }}` }, w => { w.description = token }, w => { w.nodes[0].notes = token }]) {
+    const w = raw(); change(w); assert.ok(findHardcodedSecret(w))
+  }
 })

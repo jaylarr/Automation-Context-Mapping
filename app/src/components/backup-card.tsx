@@ -96,6 +96,7 @@ export function BackupCard({ slug, status, summary }: Props) {
         open={open}
         slug={slug}
         changed={status.changed}
+        snapshot={status.snapshot ?? ''}
         onClose={() => setOpen(false)}
         onDone={(r) => {
           setResult(r)
@@ -111,11 +112,13 @@ function CommitDialog({
   open,
   slug,
   changed,
+  snapshot,
   onClose,
   onDone,
 }: {
   open: boolean
   slug: string
+  snapshot: string
   changed: RepoStatus['changed']
   onClose: () => void
   onDone: (r: ActionState) => void
@@ -168,7 +171,7 @@ function CommitDialog({
             return
           }
           start(async () => {
-            const r = await commitProjectAction(slug, message, changelog)
+            const r = await commitProjectAction(slug, message, changelog, snapshot)
             if (r?.ok) onDone(r)
             else setError(r?.message ?? 'Commit failed.')
           })

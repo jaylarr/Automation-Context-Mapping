@@ -15,6 +15,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { REPO, fail } from './lib/common.mjs'
+import { snapshotState } from './lib/state-snapshot.mjs'
+import { xml, systemdQuote, stageRelease, activeRelease, activateRelease, rollbackRelease } from './lib/releases.mjs'
 
 const APP = path.join(REPO, 'app')
 const DATA = path.join(APP, 'data')
@@ -34,11 +36,11 @@ const run = (cmd, args, opts = {}) => {
 const quiet = (cmd, args) => spawnSync(cmd, args, { stdio: 'ignore' }).status === 0
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 
-async function up(timeoutS = 45) {
+async function up(timeoutS = 45, releaseId) {
   for (let i = 0; i < timeoutS; i++) {
     try {
       const r = await fetch(`${URL}/api/health`, { signal: AbortSignal.timeout(3000) })
-      if (r.ok) return true
+      if (r.ok && (!releaseId || (await r.json()).releaseId === releaseId)) return true
     } catch {
       /* not answering yet */
     }
@@ -50,7 +52,7 @@ async function up(timeoutS = 45) {
 // ---------------------------------------------------------------- service definitions
 
 function nextBin() {
-  return path.join(APP, 'node_modules', 'next', 'dist', 'bin', 'next')
+  return path.join(REPO, 'scripts', 'control-center-runtime.mjs')
 }
 
 function writeService() {
@@ -66,16 +68,15 @@ function writeService() {
   <key>Label</key><string>${LABEL}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${process.execPath}</string>
-    <string>${nextBin()}</string>
-    <string>start</string><string>-H</string><string>127.0.0.1</string><string>-p</string><string>${PORT}</string>
+    <string>${xml(process.execPath)}</string>
+    <string>${xml(nextBin())}</string>
   </array>
-  <key>WorkingDirectory</key><string>${APP}</string>
+  <key>WorkingDirectory</key><string>${xml(APP)}</string>
   <key>EnvironmentVariables</key><dict><key>NODE_ENV</key><string>production</string></dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>${LOG}</string>
-  <key>StandardErrorPath</key><string>${LOG}</string>
+  <key>StandardOutPath</key><string>${xml(LOG)}</string>
+  <key>StandardErrorPath</key><string>${xml(LOG)}</string>
 </dict>
 </plist>
 `,
@@ -89,13 +90,12 @@ Description=Automation Control Center (n8n workspace dashboard)
 After=network.target
 
 [Service]
-WorkingDirectory=${APP}
 Environment=NODE_ENV=production
-ExecStart=${process.execPath} ${nextBin()} start -H 127.0.0.1 -p ${PORT}
+ExecStart=${systemdQuote(process.execPath)} ${systemdQuote(nextBin())}
 Restart=always
 RestartSec=3
-StandardOutput=append:${LOG}
-StandardError=append:${LOG}
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=default.target
@@ -134,52 +134,35 @@ function build(distDir) {
 
 const commands = {
   async install() {
-    say('Installing dependencies…')
-    run(npm, ['ci'], { cwd: APP })
-    say('Building…')
-    build('.next')
-    writeService()
-    if (process.platform !== 'darwin') {
-      run('systemctl', ['--user', 'daemon-reload'])
-      run('systemctl', ['--user', 'enable', UNIT])
-      say('Tip: run "loginctl enable-linger $USER" once so it also runs while you are logged out.')
-    }
-    svc.stop()
-    svc.start()
-    say((await up()) ? `Running at ${URL}` : 'Started, but not answering yet. See: node scripts/control-center.mjs logs')
+    await commands.update()
+    if (process.platform !== 'darwin') run('systemctl', ['--user', 'enable', UNIT])
   },
-
   async update() {
-    const staging = path.join(APP, '.next-staging')
-    const live = path.join(APP, '.next')
-    const old = path.join(APP, '.next-old')
-    say('Installing dependencies…')
-    run(npm, ['ci'], { cwd: APP })
-    say('Building the new version (the current one keeps running)…')
-    fs.rmSync(staging, { recursive: true, force: true })
+    const lock = path.join(DATA, 'maintenance.lock')
+    fs.mkdirSync(DATA, { recursive: true })
+    fs.writeFileSync(lock, String(process.pid), { flag: 'wx' })
     try {
-      build('.next-staging')
-    } catch {
-      fs.rmSync(staging, { recursive: true, force: true })
-      fail('Build failed. Nothing changed; the current version is still running.')
-    }
-    say('Build OK. Switching to the new version…')
-    svc.stop()
-    fs.rmSync(old, { recursive: true, force: true })
-    if (fs.existsSync(live)) fs.renameSync(live, old)
-    fs.renameSync(staging, live)
-    svc.start()
-    if (await up()) {
-      fs.rmSync(old, { recursive: true, force: true })
-      say(`Update complete. Running at ${URL}`)
-    } else {
-      say('The new version is not answering. Rolling back…')
-      svc.stop()
-      fs.rmSync(live, { recursive: true, force: true })
-      if (fs.existsSync(old)) fs.renameSync(old, live)
-      svc.start()
-      fail((await up()) ? 'Rolled back to the previous version.' : 'Rolled back, but the app is still not answering. See the logs.')
-    }
+      const candidate = stageRelease(REPO)
+      const previous = activeRelease(REPO)
+      let stopped = false
+      try {
+        svc.stop(); stopped = true
+        await snapshotState(REPO)
+        activateRelease(REPO, candidate)
+        writeService()
+        if (process.platform !== 'darwin') run('systemctl', ['--user', 'daemon-reload'])
+        svc.start()
+        if (!await up(45, candidate.id)) throw new Error('Candidate failed release-specific health verification.')
+        say(`Update complete. Running release ${candidate.id} at ${URL}`)
+      } catch (error) {
+        if (!stopped) throw error
+        svc.stop()
+        rollbackRelease(REPO, previous)
+        svc.start()
+        const recovered = await up(45, previous.id)
+        throw new Error(`${error.message} Update rolled back. ${recovered ? 'Previous release verified healthy.' : 'Previous release health identity is unverified; inspect server.log.'}`)
+      }
+    } finally { fs.rmSync(lock, { force: true }) }
   },
 
   async start() {

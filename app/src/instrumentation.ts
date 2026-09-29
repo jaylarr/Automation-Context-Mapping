@@ -3,12 +3,21 @@
  * The interval is read from settings on every tick, so changes apply without a restart.
  */
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== 'nodejs') return
+  if (process.env.NEXT_RUNTIME !== 'nodejs' || process.env.CONTROL_CENTER_BACKGROUND === 'off') return
+  const state = globalThis as typeof globalThis & { __ccScheduled?: boolean }
+  if (state.__ccScheduled) return
+  state.__ccScheduled = true
 
   const { getSettings, getMeta } = await import('./lib/settings')
   const { isConfigured, syncExecutions } = await import('./lib/n8n')
   const { listProjects } = await import('./lib/projects')
-  const { logActivity } = await import('./lib/logs')
+  const { logActivity, pruneOlderThan } = await import('./lib/logs')
+  const prune = () => {
+    try { pruneOlderThan(getSettings().retentionDays) }
+    catch { logActivity({ level: 'error', action: 'retention.failed', message: 'Local log retention failed; will retry.' }) }
+  }
+  prune()
+  setInterval(prune, 60 * 60_000).unref()
 
   const { purgeExpiredTrashAndRows } = await import('./lib/trash-cleanup')
 

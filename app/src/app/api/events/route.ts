@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { type NextRequest, NextResponse } from 'next/server'
 import { LEVELS, type Level, insertEvent, logActivity } from '@/lib/logs'
 import { env } from '@/lib/settings'
+import { BodyLimitError, readBoundedBody } from '@/lib/request-body'
 
 /**
  * Webhook event inbox. n8n workflows POST here (HTTP Request node) to record what happened.
@@ -17,6 +18,7 @@ import { env } from '@/lib/settings'
 export const dynamic = 'force-dynamic'
 
 const MAX_BODY = 64 * 1024
+let lastRejectionLog = 0
 
 function err(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status })
@@ -35,12 +37,18 @@ const str = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.
 export async function POST(req: NextRequest) {
   if (!env.ingestToken()) return err(503, 'not_configured', 'INGEST_TOKEN is not set in app/.env.local.')
   if (!tokenOk(req.headers.get('x-ingest-token'))) {
-    logActivity({ level: 'warn', action: 'events.rejected', message: 'Rejected event with a missing or invalid token' })
+    if (Date.now() - lastRejectionLog > 60_000) {
+      lastRejectionLog = Date.now()
+      logActivity({ level: 'warn', action: 'events.rejected', message: 'Rejected event with a missing or invalid token (logged at most once per minute)' })
+    }
     return err(401, 'unauthorized', 'Missing or invalid x-ingest-token header.')
   }
 
-  const raw = await req.text()
-  if (raw.length > MAX_BODY) return err(413, 'too_large', `Body must be under ${MAX_BODY / 1024} KB.`)
+  let raw: string
+  try { raw = await readBoundedBody(req, MAX_BODY) }
+  catch (e) {
+    return e instanceof BodyLimitError ? err(413, 'too_large', 'Body must be at most 64 KiB.') : err(400, 'invalid_body', 'Body could not be read as UTF-8.')
+  }
   let body: Record<string, unknown>
   try {
     const parsed: unknown = JSON.parse(raw)
@@ -61,7 +69,7 @@ export async function POST(req: NextRequest) {
     project: str(body.project, 60),
     workflow: str(body.workflow, 200),
     data: body.data,
-    sourceIp: req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? null,
+    sourceIp: null,
   })
   return NextResponse.json({ ok: true, id }, { status: 201 })
 }

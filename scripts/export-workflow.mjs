@@ -11,6 +11,8 @@
 // Adds a CHANGELOG line under [Unreleased]. Prints a JSON summary. Never commits.
 import fs from 'node:fs'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { atomicJson } from './lib/releases.mjs'
 import { PROJECTS, REPO, SLUG_RE, fail, isMain, parseArgs } from './lib/common.mjs'
 
 const core = await import(new URL('../app/src/lib/sanitize-core.mjs', import.meta.url))
@@ -38,7 +40,7 @@ function appendChangelog(projectDir, line) {
 }
 
 /** The file that already holds this workflow id, or the next free NN (archive included). */
-function targetFile(projectDir, wf) {
+function targetFile(projectDir, wf, installation, manifest) {
   const dir = path.join(projectDir, 'workflows')
   let max = 0
   for (const sub of [dir, path.join(dir, '_archive')]) {
@@ -48,8 +50,13 @@ function targetFile(projectDir, wf) {
       if (m) max = Math.max(max, Number(m[1]))
       if (sub === dir && f.endsWith('.json') && !f.endsWith('.raw.json') && wf.id) {
         try {
-          if (JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')).id === wf.id) return { file: f, existing: true }
-        } catch {
+          if (JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')).id === wf.id) {
+            const binding = manifest.workflows.find(b => b.file === f)
+            if (!binding) throw new Error('Unresolved legacy export: bind its source installation first.')
+            if (binding.source.installation === installation && binding.source.workflowId === wf.id) return { file: f, existing: true }
+          }
+        } catch (e) {
+          if (e.message.startsWith('Unresolved')) throw e
           /* not a workflow file */
         }
       }
@@ -58,10 +65,14 @@ function targetFile(projectDir, wf) {
   return { file: `${String(max + 1).padStart(2, '0')}-${core.slugifyName(wf.name)}.json`, existing: false }
 }
 
-export function exportWorkflow({ project, raw, file, changelog, keepRaw = false, dryRun = false }) {
+export function exportWorkflow({ project, raw, file, installation, changelog, keepRaw = false, dryRun = false }) {
   if (!SLUG_RE.test(project)) throw new Error(`Invalid project slug: ${project}`)
   const projectDir = path.join(PROJECTS, project)
   if (!fs.existsSync(path.join(projectDir, 'README.md'))) throw new Error(`Project not found: n8n workflows/${project}`)
+  if (typeof installation !== 'string' || !/^[a-zA-Z0-9-]{8,80}$/.test(installation)) throw new Error('Provide --installation with the immutable installation UID from Control Center Settings.')
+  const manifestFile = path.join(projectDir, 'documentation', 'workflow-bindings.json')
+  const manifest = fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, 'utf8')) : { version: 1, workflows: [] }
+  if (manifest.version !== 1 || !Array.isArray(manifest.workflows)) throw new Error('Unsupported workflow bindings manifest.')
   const rawPath = path.resolve(REPO, raw)
   const clean = core.sanitizeWorkflow(JSON.parse(fs.readFileSync(rawPath, 'utf8')))
 
@@ -78,8 +89,9 @@ export function exportWorkflow({ project, raw, file, changelog, keepRaw = false,
     throw e
   }
 
-  const target = file ? { file, existing: fs.existsSync(path.join(projectDir, 'workflows', file)) } : targetFile(projectDir, clean)
+  const target = file ? { file, existing: fs.existsSync(path.join(projectDir, 'workflows', file)) } : targetFile(projectDir, clean, installation, manifest)
   if (!/^\d{2,}-[a-z0-9-]+\.json$/.test(target.file)) throw new Error(`File name must look like NN-kebab-name.json, got ${target.file}`)
+  if (target.existing && !manifest.workflows.some(b => b.file === target.file && b.source.installation === installation && b.source.workflowId === clean.id)) throw new Error('Existing file has no matching source binding. Refusing overwrite.')
   const outPath = path.join(projectDir, 'workflows', target.file)
   const text = `${JSON.stringify(clean, null, 2)}\n`
   const unchanged = target.existing && fs.existsSync(outPath) && core.fingerprint(JSON.parse(fs.readFileSync(outPath, 'utf8'))) === core.fingerprint(clean)
@@ -87,7 +99,11 @@ export function exportWorkflow({ project, raw, file, changelog, keepRaw = false,
 
   if (!dryRun && !unchanged) {
     fs.mkdirSync(path.dirname(outPath), { recursive: true })
-    fs.writeFileSync(outPath, text, 'utf8')
+    if (!target.existing) {
+      manifest.workflows.push({ key: randomUUID(), file: target.file, source: { installation, workflowId: String(clean.id) }, targets: [] })
+      atomicJson(manifestFile, manifest)
+    }
+    atomicJson(outPath, clean)
     appendChangelog(projectDir, line)
   }
   if (!dryRun && !keepRaw && rawPath.endsWith('.raw.json')) fs.rmSync(rawPath, { force: true })
@@ -109,6 +125,7 @@ if (isMain(import.meta.url)) {
     const r = exportWorkflow({
       project: String(a.project),
       raw: String(a.raw),
+      installation: a.installation ? String(a.installation) : undefined,
       file: a.file ? String(a.file) : undefined,
       changelog: a.changelog ? String(a.changelog) : undefined,
       keepRaw: Boolean(a.keepRaw),

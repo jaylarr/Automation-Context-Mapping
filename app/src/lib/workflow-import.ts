@@ -1,3 +1,5 @@
+import { readBindings, saveBinding, workflowKey } from './workflow-bindings'
+import { atomicWrite } from './file-safety'
 import fs from 'node:fs'
 import path from 'node:path'
 import { type Instance, connectedInstances, getInstance } from './instances'
@@ -69,15 +71,22 @@ type TrackedFile = { project: string; file: string; abs: string; fingerprint: st
 function indexRepoWorkflows(): Map<string, TrackedFile> {
   const map = new Map<string, TrackedFile>()
   for (const p of listProjects()) {
-    const dir = path.join(PROJECTS_DIR, p.slug, 'workflows')
+    const dir = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, p.slug, 'workflows')
     if (!fs.existsSync(dir)) continue
+    const bindings = readBindings(p.slug)
     for (const f of fs.readdirSync(dir)) {
       if (!f.endsWith('.json') || f.endsWith('.raw.json')) continue
-      const abs = path.join(dir, f)
+      const abs = path.join(/* turbopackIgnore: true */ dir, f)
       try {
         const w = JSON.parse(fs.readFileSync(abs, 'utf8')) as Record<string, unknown>
-        if (typeof w.id === 'string') map.set(w.id, { project: p.slug, file: f, abs, fingerprint: fingerprint(w) })
-      } catch {
+        const binding = bindings.workflows.find((b) => b.file === f)
+        if (binding) {
+          const key = workflowKey(binding.source.installation, binding.source.workflowId)
+          if (map.has(key)) throw new Error('Duplicate source binding across projects.')
+          map.set(key, { project: p.slug, file: f, abs, fingerprint: fingerprint(w) })
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message.includes('Duplicate source binding')) throw e
         /* not a valid workflow file; ignore */
       }
     }
@@ -125,7 +134,7 @@ export async function buildWorkflowRows(
   const rows = lists
     .flat()
     .map(({ inst, w }) => {
-      const t = tracked.get(w.id)
+      const t = tracked.get(workflowKey(inst.uid, w.id))
       const match = t ? { project: t.project, suggested: null } : matchProject(w, projects)
       const status: ImportStatus = !t ? 'new' : t.fingerprint === fingerprint(sanitizeWorkflow(w)) ? 'uptodate' : 'changed'
       return {
@@ -165,8 +174,8 @@ function slugify(name: string): string {
 
 function nextNumber(projectDir: string): string {
   let max = 0
-  for (const sub of ['workflows', path.join('workflows', '_archive')]) {
-    const dir = path.join(projectDir, sub)
+  for (const sub of ['workflows', path.join(/* turbopackIgnore: true */ 'workflows', '_archive')]) {
+    const dir = path.join(/* turbopackIgnore: true */ projectDir, sub)
     if (!fs.existsSync(dir)) continue
     for (const f of fs.readdirSync(dir)) {
       const m = f.match(/^(\d{2,})-/)
@@ -183,12 +192,22 @@ export async function importWorkflow(instanceId: string, id: string, chosenProje
   const inst = getInstance(instanceId)
   if (!inst) return { id, name: id, ok: false, message: 'Unknown n8n instance.' }
   const w: N8nWorkflowFull = await api(inst, `/workflows/${encodeURIComponent(id)}?excludePinnedData=true`)
-  const tracked = indexRepoWorkflows().get(id)
+  const tracked = indexRepoWorkflows().get(workflowKey(inst.uid, id))
   const project = tracked?.project ?? chosenProject
   if (!project || !SLUG_RE.test(project)) return { id, name: w.name, ok: false, message: 'Pick a project first.' }
-  const projectDir = path.join(PROJECTS_DIR, project)
+  const projectDir = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, project)
   if (!fs.existsSync(projectDir)) return { id, name: w.name, ok: false, message: `Project "${project}" doesn't exist.` }
 
+  if (!tracked) {
+    const bindings = readBindings(project)
+    const legacyDir = path.join(/* turbopackIgnore: true */ projectDir, 'workflows')
+    for (const name of fs.existsSync(legacyDir) ? fs.readdirSync(legacyDir) : []) {
+      if (!name.endsWith('.json') || name.endsWith('.raw.json') || bindings.workflows.some((b) => b.file === name)) continue
+      let legacy: { id?: string }
+      try { legacy = JSON.parse(fs.readFileSync(path.join(/* turbopackIgnore: true */ legacyDir, name), 'utf8')) } catch { continue }
+      if (legacy.id === id) throw new Error('An unbound legacy export has this ID. Bind its source installation explicitly before importing.')
+    }
+  }
   const secret = findHardcodedSecret(w)
   if (secret)
     return {
@@ -199,13 +218,14 @@ export async function importWorkflow(instanceId: string, id: string, chosenProje
     }
 
   const clean = sanitizeWorkflow(w)
-  const dir = path.join(projectDir, 'workflows')
+  const dir = path.join(/* turbopackIgnore: true */ projectDir, 'workflows')
   fs.mkdirSync(dir, { recursive: true })
   const file = tracked?.file ?? `${nextNumber(projectDir)}-${slugify(w.name)}.json`
   if (tracked && tracked.fingerprint === fingerprint(clean))
     return { id, name: w.name, ok: true, message: 'Already up to date.', project, file }
 
-  fs.writeFileSync(path.join(dir, file), `${JSON.stringify(clean, null, 2)}\n`, 'utf8')
+  saveBinding(project, file, inst.uid, id)
+  atomicWrite(path.join(/* turbopackIgnore: true */ dir, file), `${JSON.stringify(clean, null, 2)}\n`)
   const today = localDate()
   appendChangelog(
     projectDir,

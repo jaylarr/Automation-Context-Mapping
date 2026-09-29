@@ -1,8 +1,8 @@
+import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFile, execFileSync } from 'node:child_process'
-import { promisify } from 'node:util'
-import { findSecretInText } from './leak-scan'
+import { execFileSync } from 'node:child_process'
+import { checkBytes } from './file-safety'
 
 /**
  * Git for project folders. Every project has its own private repo ("n8n workflows/<slug>/.git").
@@ -11,6 +11,7 @@ import { findSecretInText } from './leak-scan'
  */
 
 export type RepoStatus = {
+  snapshot?: string
   hasRepo: boolean
   /** No commit yet (a fresh `git init`). */
   empty: boolean
@@ -37,7 +38,7 @@ function gitSync(cwd: string, args: string[]): string | null {
 
 /** One `git status` + one `git log` + one `git remote`: fast enough for every card on the Projects page. */
 export function repoStatus(dir: string): RepoStatus {
-  if (!fs.existsSync(path.join(dir, '.git'))) return NO_REPO
+  if (!fs.existsSync(path.join(/* turbopackIgnore: true */ dir, '.git'))) return NO_REPO
   const status = gitSync(dir, ['status', '--porcelain=v2', '--branch', '--untracked-files=all', '-z'])
   if (status === null) return NO_REPO
   const out: RepoStatus = { ...NO_REPO, hasRepo: true, changed: [] }
@@ -64,6 +65,13 @@ export function repoStatus(dir: string): RepoStatus {
     const [sha, subject, date] = (log ?? '').trim().split('\x1f')
     if (sha) out.lastCommit = { sha, subject, date }
   }
+  const digest = createHash('sha256').update(status)
+  for (const file of out.changed) {
+    digest.update(file.path)
+    try { digest.update(fs.readFileSync(path.join(/* turbopackIgnore: true */ dir, file.path))) }
+    catch { digest.update('<unreadable-or-deleted>') }
+  }
+  out.snapshot = digest.digest('hex')
   return out
 }
 
@@ -87,59 +95,86 @@ export function backupSummary(s: RepoStatus): { label: string; tone: 'ok' | 'war
 
 // ---------------------------------------------------------------- commit
 
-const TEXT_EXT = /\.(json|md|txt|csv|ya?ml|js|mjs|cjs|ts|tsx|jsx|html|css|sql|xml|env|ini|toml|sh|ps1)$/i
-const MAX_SCAN_BYTES = 2 * 1024 * 1024
-
 /** Refuses to commit a text file that looks like it contains a secret. Returns "<file>: <what>" or null. */
 export function scanForSecrets(dir: string, files: string[]): string | null {
   for (const rel of files) {
-    if (!TEXT_EXT.test(rel)) continue
-    const abs = path.join(dir, rel)
+    const abs = path.join(/* turbopackIgnore: true */ dir, rel)
     try {
-      const st = fs.statSync(abs)
-      if (!st.isFile() || st.size > MAX_SCAN_BYTES) continue
-      const hit = findSecretInText(fs.readFileSync(abs, 'utf8'))
+      const st = fs.lstatSync(abs)
+      if (!st.isFile()) return `${rel}: unsupported file type`
+      const hit = checkBytes(fs.readFileSync(abs))
       if (hit) return `${rel}: ${hit}`
     } catch {
-      /* deleted or unreadable: nothing to scan */
+      return `${rel}: could not read the file for inspection`
     }
   }
   return null
 }
 
-const execFileAsync = promisify(execFile)
 
 /**
  * Commits changes in a project repo. `paths` limits the commit to those files (auto-export);
  * otherwise every change is committed. Never pushes.
  */
-export async function commit(dir: string, message: string, paths?: string[]): Promise<{ sha: string; files: string[] }> {
-  const s = repoStatus(dir)
-  if (!s.hasRepo) throw new Error('This project has no git repo yet. Set it up first.')
+export async function commit(dir: string, message: string, paths?: string[], expectedSnapshot?: string): Promise<{ sha: string; files: string[] }> {
+  const status = repoStatus(dir)
+  if (!status.hasRepo) throw new Error('This project has no Git repository.')
+  if (expectedSnapshot && status.snapshot !== expectedSnapshot) throw new Error('Files changed since the preview. Refresh and review again.')
   const msg = message.replace(/\r/g, '').trim()
-  if (!msg) throw new Error('Write a commit message.')
-  if (msg.length > 2000) throw new Error('The commit message is too long.')
-  const wanted = paths ? new Set(paths.map((p) => p.replace(/\\/g, '/'))) : null
-  const files = s.changed.map((c) => c.path).filter((p) => !wanted || wanted.has(p))
-  if (!files.length) throw new Error('Nothing to commit: no changed files.')
-  const secret = scanForSecrets(dir, files.filter((f) => s.changed.find((c) => c.path === f)?.kind !== 'deleted'))
-  if (secret) throw new Error(`Not committed: ${secret}. Move the secret into an n8n credential (or out of the repo), then try again.`)
-
-  const run = (args: string[]) => execFileAsync('git', args, { cwd: dir, timeout: 30_000, windowsHide: true })
+  if (!msg || msg.length > 2000) throw new Error('Write a commit message of at most 2000 characters.')
+  const files = status.changed.map((c) => c.path).filter((f) => !paths || paths.includes(f))
+  if (!files.length) throw new Error('Nothing to commit.')
+  const gitDir = gitSync(dir, ['rev-parse', '--absolute-git-dir'])?.trim()
+  if (!gitDir) throw new Error('Cannot locate Git metadata.')
+  const hooksPath = gitSync(dir, ['config', '--get', 'core.hooksPath'])?.trim()
+  if (hooksPath || ['pre-commit', 'prepare-commit-msg', 'commit-msg', 'post-commit'].some((hook) => fs.existsSync(path.join(/* turbopackIgnore: true */ gitDir, 'hooks', hook))) || gitSync(dir, ['config', '--get', 'commit.gpgsign'])?.trim() === 'true') throw new Error('This repository requires Git hooks or signing. Use a reviewed manual commit; the app will not bypass those checks.')
+  const index = path.join(/* turbopackIgnore: true */ gitDir, `cc-index-${randomUUID()}`)
+  const originalIndex = path.join(/* turbopackIgnore: true */ gitDir, 'index')
+  const original = fs.existsSync(originalIndex) ? fs.readFileSync(originalIndex) : null
+  const resultIndex = `${index}-result`
+  const indexLock = `${originalIndex}.lock`
+  let ownsLock = false
+  const env = { ...process.env, GIT_INDEX_FILE: index }
+  const run = (args: string[]) => execFileSync('git', args, { cwd: dir, env, timeout: 30000, windowsHide: true, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+  const head = gitSync(dir, ['rev-parse', '--verify', 'HEAD'])?.trim()
   try {
-    if (wanted) {
-      await run(['add', '--all', '--', ...files])
-      await run(['commit', '-m', msg, '--', ...files])
-    } else {
-      await run(['add', '--all'])
-      await run(['commit', '-m', msg])
+    if (head) run(['read-tree', head])
+    else run(['read-tree', '--empty'])
+    run(['add', '--all', ...(paths ? ['--', ...paths] : [])])
+    const entries = run(['diff', '--cached', '--name-only', '--diff-filter=ACMRT', '-z']).split('\0').filter(Boolean)
+    for (const file of entries) {
+      const mode = run(['ls-files', '--stage', '--', file]).split(' ')[0]
+      if (!['100644', '100755'].includes(mode)) throw new Error('Unsupported staged file type; use a reviewed manual commit.')
+      const bytes = execFileSync('git', ['show', `:${file}`], { cwd: dir, env, timeout: 30000, windowsHide: true, maxBuffer: 64 * 1024 * 1024 })
+      const hit = checkBytes(bytes)
+      if (hit) throw new Error(`Not committed: ${file}: ${hit}`)
     }
-  } catch (e) {
-    const text = String((e as { stderr?: string }).stderr || (e as Error).message)
-    if (/user\.(name|email)|Please tell me who you are/i.test(text))
-      throw new Error('Git doesn’t know who you are yet. Run: git config --global user.name "Your Name" and git config --global user.email "you@example.com"')
-    throw new Error(`git commit failed: ${text.split('\n').find((l) => l.trim()) ?? 'unknown error'}`)
+    if (repoStatus(dir).snapshot !== status.snapshot) throw new Error('Files changed while preparing the commit. Refresh and review again.')
+    const tree = run(['write-tree']).trim()
+    const sha = run(['commit-tree', tree, ...(head ? ['-p', head] : []), '-m', msg]).trim()
+    const committedPaths = run(['diff', '--cached', '--name-only', '-z']).split('\0').filter(Boolean)
+    if (original) fs.writeFileSync(resultIndex, original)
+    const resultEnv = { ...env, GIT_INDEX_FILE: resultIndex }
+    const reset = (args: string[]) => execFileSync('git', args, { cwd: dir, env: resultEnv, timeout: 30000, windowsHide: true, stdio: 'pipe' })
+    if (!original) reset(['read-tree', '--empty'])
+    reset(['reset', '-q', sha, '--', ...committedPaths])
+    const fd = fs.openSync(indexLock, 'wx')
+    ownsLock = true
+    try {
+      const current = fs.existsSync(originalIndex) ? fs.readFileSync(originalIndex) : null
+      if (original ? !current?.equals(original) : current !== null) throw new Error('Git staging changed during review. Retry from a fresh preview.')
+      fs.writeFileSync(fd, fs.readFileSync(resultIndex))
+      fs.fsyncSync(fd)
+      run(['update-ref', 'HEAD', sha, head ?? '0'.repeat(40)])
+    } finally { fs.closeSync(fd) }
+    fs.renameSync(indexLock, originalIndex)
+    ownsLock = false
+    return { sha: sha.slice(0, 12), files }
+  } finally {
+    if (ownsLock) fs.rmSync(indexLock, { force: true })
+    fs.rmSync(resultIndex, { force: true })
+    fs.rmSync(`${resultIndex}.lock`, { force: true })
+    fs.rmSync(index, { force: true })
+    fs.rmSync(`${index}.lock`, { force: true })
   }
-  const sha = (gitSync(dir, ['rev-parse', '--short', 'HEAD']) ?? '').trim()
-  return { sha, files }
 }

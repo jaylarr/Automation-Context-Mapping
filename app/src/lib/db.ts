@@ -130,6 +130,29 @@ const MIGRATIONS: string[] = [
   ALTER TABLE executions ADD COLUMN captured TEXT;
   ALTER TABLE executions ADD COLUMN captured_at TEXT;
   `,
+  // 6: installation identities and minimal execution facts, independent of detail logging.
+  `
+  ALTER TABLE instances ADD COLUMN uid TEXT;
+  ALTER TABLE executions ADD COLUMN first_seen_at TEXT;
+  UPDATE executions SET first_seen_at = synced_at;
+  UPDATE instances SET uid = lower(hex(randomblob(16)));
+  CREATE UNIQUE INDEX idx_instance_uid ON instances(uid);
+  CREATE TABLE execution_facts (
+    instance_id TEXT NOT NULL, id TEXT NOT NULL, workflow_id TEXT NOT NULL,
+    status TEXT NOT NULL, mode TEXT, started_at TEXT, stopped_at TEXT,
+    first_seen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    observed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    PRIMARY KEY(instance_id,id)
+  );
+  CREATE TABLE health_carry (
+    instance_id TEXT NOT NULL, workflow_id TEXT NOT NULL, through_at TEXT NOT NULL,
+    fail_streak INTEGER NOT NULL, ignore_manual INTEGER NOT NULL, last_success_at TEXT,
+    PRIMARY KEY(instance_id,workflow_id)
+  );
+  CREATE INDEX idx_facts_workflow ON execution_facts(instance_id, workflow_id, started_at);
+  INSERT INTO execution_facts(instance_id,id,workflow_id,status,mode,started_at,stopped_at,first_seen_at)
+    SELECT instance_id,id,workflow_id,status,mode,started_at,stopped_at,COALESCE(first_seen_at,synced_at) FROM executions;
+  `,
 ]
 
 function open(): Database.Database {

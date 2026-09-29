@@ -1,7 +1,8 @@
+import { workflowKey } from './workflow-bindings'
 import { db } from './db'
 import { type Instance, apiKeyFor, connectedInstances, getInstance } from './instances'
 import { logActivity, pruneOlderThan } from './logs'
-import { getSettings, setMeta } from './settings'
+import { getSettings, getMeta, setMeta } from './settings'
 import { prefsKey, prefsMap, recordHealth, shouldLog } from './workflow-prefs'
 import { MAX_CAPTURES, type RunData, extractCaptures } from './capture'
 import { workflowProjects } from './projects'
@@ -37,6 +38,7 @@ export async function api<T>(
   method: 'GET' | 'POST' | 'PUT' = 'GET',
   body?: unknown,
 ): Promise<T> {
+  if (process.env.CONTROL_CENTER_OFFLINE === '1') throw new Error('Remote requests are disabled in this validation process.')
   const key = apiKeyFor(instance.id)
   if (!key) throw new Error(`No API key saved for "${instance.name}". Add it in Settings.`)
   const res = await fetch(`${instance.baseUrl}/api/v1${pathAndQuery}`, {
@@ -50,16 +52,19 @@ export async function api<T>(
     const body = await res.text().catch(() => '')
     throw new Error(`n8n API ${res.status} ${res.statusText}${body ? `: ${body.slice(0, 200)}` : ''}`)
   }
-  return (await res.json()) as T
+  const result = (await res.json()) as T
+  const current = getInstance(instance.id)
+  if (!current || current.baseUrl !== instance.baseUrl) throw new Error('Instance removed or changed during request.')
+  return result
 }
 
 /**
  * Maps a workflow to a project slug: the project whose workflows/ folder holds its JSON (same rule
  * as the Workflows page), else the "[project-slug] Name" prefix, else a tag matching a slug.
  */
-function projectFor(wf: N8nWorkflow | undefined, knownSlugs: Set<string>, tracked: Map<string, string>): string | null {
+function projectFor(wf: N8nWorkflow | undefined, knownSlugs: Set<string>, tracked: Map<string, string>, installation: string): string | null {
   if (!wf) return null
-  const saved = tracked.get(String(wf.id))
+  const saved = tracked.get(workflowKey(installation, String(wf.id)))
   if (saved) return saved
   const prefix = wf.name.match(/^\[([a-z0-9-]+)\]/)?.[1]
   if (prefix) return prefix
@@ -130,7 +135,7 @@ export async function setWorkflowPublished(instanceId: string, workflowId: strin
  * older than REVALIDATE_MS is refreshed in the background for the next request.
  */
 const REVALIDATE_MS = 30_000
-type CacheEntry = { at: number; data: unknown[]; inflight?: Promise<unknown[]> }
+type CacheEntry = { baseUrl?: string; at: number; data: unknown[]; inflight?: Promise<unknown[]> }
 const g = globalThis as unknown as { __ccWorkflowCache?: Map<string, CacheEntry> }
 const workflowCache = (g.__ccWorkflowCache ??= new Map())
 
@@ -153,7 +158,8 @@ function refreshWorkflowList(inst: Instance): Promise<unknown[]> {
   if (entry?.inflight) return entry.inflight
   const p = fetchWorkflowList(inst)
     .then((data) => {
-      workflowCache.set(inst.id, { at: Date.now(), data })
+      if (getInstance(inst.id)?.uid !== inst.uid || getInstance(inst.id)?.baseUrl !== inst.baseUrl) throw new Error('Instance changed while fetching.')
+      workflowCache.set(inst.id, { baseUrl: inst.baseUrl, at: Date.now(), data })
       return data
     })
     .catch((e) => {
@@ -168,7 +174,7 @@ function refreshWorkflowList(inst: Instance): Promise<unknown[]> {
 /** All workflows of an instance. `fresh` waits for a new fetch; otherwise a cached copy is served. */
 export async function listWorkflows<T>(inst: Instance, opts: { fresh?: boolean } = {}): Promise<{ data: T[]; fetchedAt: number }> {
   const entry = workflowCache.get(inst.id)
-  const hasData = entry && entry.at > 0
+  const hasData = entry && entry.at > 0 && entry.baseUrl === inst.baseUrl
   if (opts.fresh || !hasData) {
     const data = await refreshWorkflowList(inst)
     return { data: data as T[], fetchedAt: workflowCache.get(inst.id)?.at ?? Date.now() }
@@ -225,7 +231,10 @@ async function syncOne(inst: Instance, trigger: 'manual' | 'auto', knownSlugs: S
 
     // 2. recent executions, newest first
     const execs: N8nExecution[] = []
-    cursor = undefined
+    cursor = getMeta(`syncCursor:${inst.id}`) || undefined
+    const continuing = Boolean(cursor)
+    const boundary = getMeta(`syncBoundary:${inst.id}`)
+    let reachedBoundary = false
     for (let page = 0; page < settings.syncLookbackPages; page++) {
       const r: Paged<N8nExecution> = await api<Paged<N8nExecution>>(
         inst,
@@ -233,8 +242,41 @@ async function syncOne(inst: Instance, trigger: 'manual' | 'auto', knownSlugs: S
       )
       execs.push(...r.data)
       cursor = r.nextCursor ?? undefined
-      if (!cursor) break
+      reachedBoundary = Boolean(boundary && r.data.some((e) => String(e.id) === boundary))
+      if (!cursor || reachedBoundary) { cursor = undefined; break }
     }
+
+    if (boundary && !cursor && !reachedBoundary) setMeta(`syncGap:${inst.id}`, 'Previous checkpoint was not returned by n8n; historical coverage is incomplete.')
+
+    // Reconcile unfinished runs even when they are outside the current page window.
+    const pending = db.prepare("SELECT id FROM execution_facts WHERE instance_id = ? AND status IN ('running','waiting','new','unknown') ORDER BY observed_at LIMIT 25").all(inst.id) as { id: string }[]
+    for (const row of pending) {
+      if (execs.some((e) => String(e.id) === row.id)) continue
+      try { execs.push(await api<N8nExecution>(inst, `/executions/${encodeURIComponent(row.id)}?includeData=false`)) }
+      catch (e) {
+        if (!(e instanceof Error && /n8n API 404/.test(e.message))) throw e
+        db.prepare("UPDATE execution_facts SET status = 'unavailable' WHERE instance_id = ? AND id = ?").run(inst.id, row.id)
+      }
+    }
+    if (getInstance(inst.id)?.uid !== inst.uid) throw new Error('Instance removed during sync.')
+    const fact = db.prepare(`INSERT INTO execution_facts(instance_id,id,workflow_id,status,mode,started_at,stopped_at)
+      VALUES(?,?,?,?,?,?,?) ON CONFLICT(instance_id,id) DO UPDATE SET status=excluded.status,
+      mode=excluded.mode, started_at=COALESCE(excluded.started_at,started_at), stopped_at=excluded.stopped_at,
+      observed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')`)
+    db.transaction(() => {
+      for (const e of execs) {
+        const carry = db.prepare('SELECT through_at FROM health_carry WHERE instance_id=? AND workflow_id=?').get(inst.id,String(e.workflowId)) as {through_at:string} | undefined
+        if (e.startedAt && carry && e.startedAt <= carry.through_at) {
+          const old = db.prepare('SELECT status FROM execution_facts WHERE instance_id=? AND id=?').get(inst.id,String(e.id)) as {status:string} | undefined
+          if (!old) continue // replay of compacted history, not a new failure
+          if (old.status !== e.status) {
+            db.prepare('UPDATE health_carry SET fail_streak=0 WHERE instance_id=? AND workflow_id=?').run(inst.id,String(e.workflowId))
+            setMeta(`syncGap:${inst.id}`, 'A late historical outcome crossed the retention checkpoint; older health history is indeterminate.')
+          }
+        }
+        fact.run(inst.id, String(e.id), String(e.workflowId), e.status ?? 'unknown', e.mode ?? null, e.startedAt ?? null, e.stoppedAt ?? null)
+      }
+    })()
 
     // 3. per-workflow settings: update health (alerts) from every run, then store only what the settings allow
     const prefs = prefsMap(inst.id)
@@ -242,19 +284,19 @@ async function syncOne(inst: Instance, trigger: 'manual' | 'auto', knownSlugs: S
     for (const e of [...execs].sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))) {
       const wid = String(e.workflowId)
       const entry = byWorkflow.get(wid) ?? { name: workflows.get(wid)?.name ?? null, runs: [] }
-      entry.runs.push({ status: e.status ?? (e.finished ? 'success' : 'unknown'), mode: e.mode ?? null, startedAt: e.startedAt ?? null })
+      entry.runs.push({ status: e.status ?? 'unknown', mode: e.mode ?? null, startedAt: e.startedAt ?? null })
       byWorkflow.set(wid, entry)
     }
     recordHealth(inst.id, byWorkflow, prefs)
     const toStore = execs.filter((e) =>
-      shouldLog(prefs.get(prefsKey(inst.id, String(e.workflowId))), e.status ?? (e.finished ? 'success' : 'unknown'), e.mode),
+      shouldLog(prefs.get(prefsKey(inst.id, String(e.workflowId))), e.status ?? 'unknown', e.mode),
     )
 
     // 4. upsert
     const existing = db.prepare('SELECT status, error_message FROM executions WHERE instance_id = ? AND id = ?')
     const upsert = db.prepare(`
-      INSERT INTO executions (instance_id, id, workflow_id, workflow_name, project, status, mode, started_at, stopped_at, duration_ms, synced_at)
-      VALUES (@instance_id, @id, @workflow_id, @workflow_name, @project, @status, @mode, @started_at, @stopped_at, @duration_ms, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      INSERT INTO executions (instance_id, id, workflow_id, workflow_name, project, status, mode, started_at, stopped_at, duration_ms, synced_at, first_seen_at)
+      VALUES (@instance_id, @id, @workflow_id, @workflow_name, @project, @status, @mode, @started_at, @stopped_at, @duration_ms, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       ON CONFLICT(instance_id, id) DO UPDATE SET
         workflow_name = excluded.workflow_name, project = excluded.project, status = excluded.status,
         stopped_at = excluded.stopped_at, duration_ms = excluded.duration_ms, synced_at = excluded.synced_at`)
@@ -265,7 +307,7 @@ async function syncOne(inst: Instance, trigger: 'manual' | 'auto', knownSlugs: S
       for (const e of toStore) {
         const id = String(e.id)
         const wf = workflows.get(String(e.workflowId))
-        const status = e.status ?? (e.finished ? 'success' : 'unknown')
+        const status = e.status ?? 'unknown'
         const start = e.startedAt ? Date.parse(e.startedAt) : NaN
         const stop = e.stoppedAt ? Date.parse(e.stoppedAt) : NaN
         const prev = existing.get(inst.id, id) as { status: string; error_message: string | null } | undefined
@@ -274,7 +316,7 @@ async function syncOne(inst: Instance, trigger: 'manual' | 'auto', knownSlugs: S
           id,
           workflow_id: String(e.workflowId),
           workflow_name: wf?.name ?? null,
-          project: projectFor(wf, knownSlugs, tracked),
+          project: projectFor(wf, knownSlugs, tracked, inst.uid),
           status,
           mode: e.mode ?? null,
           started_at: e.startedAt ?? null,
@@ -289,7 +331,7 @@ async function syncOne(inst: Instance, trigger: 'manual' | 'auto', knownSlugs: S
       // saved into a project (or renamed/retagged) later, so the project filter finds every run.
       const remap = db.prepare('UPDATE executions SET project = ? WHERE instance_id = ? AND workflow_id = ? AND project IS NOT ?')
       for (const [wid, wf] of workflows) {
-        const project = projectFor(wf, knownSlugs, tracked)
+        const project = projectFor(wf, knownSlugs, tracked, inst.uid)
         remap.run(project, inst.id, wid, project)
       }
     })()
@@ -343,8 +385,12 @@ async function syncOne(inst: Instance, trigger: 'manual' | 'auto', knownSlugs: S
     }
 
     const result = { instance: inst.id, fetched: execs.length, inserted, updated, errorsDetailed, captured }
+    if (getInstance(inst.id)?.uid !== inst.uid) throw new Error('Instance removed during sync.')
+    setMeta(`syncCursor:${inst.id}`, cursor ?? '')
+    if (!continuing && execs.length) setMeta(`syncHead:${inst.id}`, String(execs[0].id))
+    if (!cursor) setMeta(`syncBoundary:${inst.id}`, getMeta(`syncHead:${inst.id}`) || boundary || '')
     setMeta(`lastSyncAt:${inst.id}`, new Date().toISOString())
-    setMeta(`lastSyncStatus:${inst.id}`, 'ok')
+    setMeta(`lastSyncStatus:${inst.id}`, cursor ? 'backfill pending; history incomplete' : getMeta(`syncGap:${inst.id}`) || 'ok')
     // Auto-syncs only log when something changed, so the activity log stays readable.
     if (trigger === 'manual' || inserted > 0) {
       logActivity({
@@ -357,7 +403,8 @@ async function syncOne(inst: Instance, trigger: 'manual' | 'auto', knownSlugs: S
     return result
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
-    setMeta(`lastSyncAt:${inst.id}`, new Date().toISOString())
+    if (!getInstance(inst.id) || getInstance(inst.id)?.baseUrl !== inst.baseUrl) throw e
+    if (/n8n API 400/.test(message) && getMeta(`syncCursor:${inst.id}`)) setMeta(`syncCursor:${inst.id}`, '')
     setMeta(`lastSyncStatus:${inst.id}`, `error: ${message}`)
     logActivity({ level: 'error', action: 'n8n.sync', message: `${inst.name}: sync failed: ${message}`, meta: { trigger, instance: inst.id } })
     throw e

@@ -1,3 +1,4 @@
+import { readBindings, workflowKey } from './workflow-bindings'
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
@@ -186,8 +187,8 @@ function summarizeWorkflow(file: string, fullPath: string): WorkflowSummary {
 }
 
 function readProject(slug: string): Project | null {
-  const dir = path.join(PROJECTS_DIR, slug)
-  const readme = readText(path.join(dir, 'README.md'))
+  const dir = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, slug)
+  const readme = readText(path.join(/* turbopackIgnore: true */ dir, 'README.md'))
   if (readme === null) return null
 
   const name = readName(readme) || prettify(slug)
@@ -195,23 +196,23 @@ function readProject(slug: string): Project | null {
   const statusRaw = infoValue(readme, 'status').toLowerCase()
   const status = (STATUSES as readonly string[]).includes(statusRaw) ? (statusRaw as Status) : 'unknown'
 
-  const wfDir = path.join(dir, 'workflows')
+  const wfDir = path.join(/* turbopackIgnore: true */ dir, 'workflows')
   const workflows = fs.existsSync(wfDir)
     ? fs
         .readdirSync(wfDir)
         .filter((f) => f.endsWith('.json') && !f.endsWith('.raw.json'))
         .sort()
-        .map((f) => summarizeWorkflow(f, path.join(wfDir, f)))
+        .map((f) => summarizeWorkflow(f, path.join(/* turbopackIgnore: true */ wfDir, f)))
     : []
 
-  const specDir = path.join(dir, 'documentation', 'spec')
+  const specDir = path.join(/* turbopackIgnore: true */ dir, 'documentation', 'spec')
   const specCount = fs.existsSync(specDir)
     ? fs.readdirSync(specDir).filter((f) => f.endsWith('.md') && f !== 'README.md').length
     : 0
 
-  const docDir = path.join(dir, 'documentation')
+  const docDir = path.join(/* turbopackIgnore: true */ dir, 'documentation')
   const docs: Project['docs'] = []
-  for (const f of ['README.md', 'AGENTS.md']) if (fs.existsSync(path.join(dir, f))) docs.push({ title: f, path: f })
+  for (const f of ['README.md', 'AGENTS.md']) if (fs.existsSync(path.join(/* turbopackIgnore: true */ dir, f))) docs.push({ title: f, path: f })
   if (fs.existsSync(docDir)) {
     for (const f of fs.readdirSync(docDir).sort())
       if (f.endsWith('.md')) docs.push({ title: f, path: `documentation/${f}` })
@@ -220,9 +221,9 @@ function readProject(slug: string): Project | null {
         if (f.endsWith('.md')) docs.push({ title: `spec/${f}`, path: `documentation/spec/${f}` })
   }
 
-  let updatedAt = fs.statSync(path.join(dir, 'README.md')).mtime
+  let updatedAt = fs.statSync(path.join(/* turbopackIgnore: true */ dir, 'README.md')).mtime
   for (const w of workflows) {
-    const m = fs.statSync(path.join(wfDir, w.file)).mtime
+    const m = fs.statSync(path.join(/* turbopackIgnore: true */ wfDir, w.file)).mtime
     if (m > updatedAt) updatedAt = m
   }
 
@@ -234,13 +235,13 @@ function readProject(slug: string): Project | null {
     status,
     version: infoValue(readme, 'version'),
     started: infoValue(readme, 'started'),
-    hasWebsite: fs.existsSync(path.join(dir, 'website')),
+    hasWebsite: fs.existsSync(path.join(/* turbopackIgnore: true */ dir, 'website')),
     specCount,
     brief: briefState(dir),
     workflows,
     docs,
     updatedAt: updatedAt.toISOString(),
-    archived: fs.existsSync(path.join(dir, ARCHIVE_MARKER)),
+    archived: fs.existsSync(path.join(/* turbopackIgnore: true */ dir, ARCHIVE_MARKER)),
   }
 }
 
@@ -260,15 +261,13 @@ export function workflowProjects(): Map<string, string> {
   if (!fs.existsSync(PROJECTS_DIR)) return map
   for (const d of fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })) {
     if (!d.isDirectory() || d.name.startsWith('_') || d.name.startsWith('.')) continue
-    const dir = path.join(PROJECTS_DIR, d.name, 'workflows')
+    const dir = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, d.name, 'workflows')
     if (!fs.existsSync(dir)) continue
-    for (const f of fs.readdirSync(dir)) {
-      if (!f.endsWith('.json') || f.endsWith('.raw.json')) continue
-      try {
-        const id = (JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')) as { id?: unknown }).id
-        if (typeof id === 'string') map.set(id, d.name)
-      } catch {
-        /* not a valid workflow file; ignore */
+    for (const b of readBindings(d.name).workflows) {
+      for (const ref of [b.source, ...b.targets]) {
+        const key = workflowKey(ref.installation, ref.workflowId)
+        if (map.has(key)) throw new Error('Duplicate workflow binding across projects.')
+        map.set(key, d.name)
       }
     }
   }
@@ -284,7 +283,7 @@ export function getProject(slug: string): Project | null {
 export function readProjectDoc(slug: string, rel: string): string | null {
   const p = getProject(slug)
   if (!p || !p.docs.some((d) => d.path === rel)) return null
-  return readText(path.join(PROJECTS_DIR, slug, rel))
+  return readText(path.join(/* turbopackIgnore: true */ PROJECTS_DIR, slug, rel))
 }
 
 /** The README facts editable from the app. Everything below the info table is left to agents. */
@@ -311,7 +310,7 @@ export function updateProjectInfo(slug: string, patch: Partial<ProjectInfo>): Pr
     if ((clean[k as keyof ProjectInfo] ?? '').length > max) throw new Error(`${k} is longer than ${max} characters.`)
   if (clean.name !== undefined && !clean.name) throw new Error('The project name can’t be empty.')
 
-  const readmePath = path.join(PROJECTS_DIR, slug, 'README.md')
+  const readmePath = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, slug, 'README.md')
   let md = fs.readFileSync(readmePath, 'utf8')
   // A blank field for a row the README doesn't have: nothing to change, don't add a placeholder row.
   if (clean.purpose === '' && !readPurpose(md)) delete clean.purpose
@@ -365,7 +364,7 @@ export function setProjectStatus(slug: string, status: Status): void {
 /** Archives or restores a project by writing/removing the marker file. Nothing else changes. */
 export function setProjectArchived(slug: string, archived: boolean): void {
   if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
-  const marker = path.join(PROJECTS_DIR, slug, ARCHIVE_MARKER)
+  const marker = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, slug, ARCHIVE_MARKER)
   if (archived) fs.writeFileSync(marker, new Date().toISOString() + '\n', 'utf8')
   else fs.rmSync(marker, { force: true })
 }
@@ -377,7 +376,7 @@ export function setProjectArchived(slug: string, archived: boolean): void {
  * _template) and are purged after TRASH_DAYS. The folder holds the project's only git history when
  * it has no remote, so a delete must be undoable.
  */
-export const TRASH_DIR = path.join(PROJECTS_DIR, '_trash')
+export const TRASH_DIR = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, '_trash')
 export const TRASH_DAYS = 30
 const REGISTRY_ROW_FILE = '.registry-row' // the removed registry row, put back on restore
 const TRASH_RE = /^([a-z0-9]+(?:-[a-z0-9]+)*)--(\d{8}-\d{6})$/
@@ -406,9 +405,9 @@ function moveDir(from: string, to: string): void {
 /** Moves the project folder to the trash and takes its row out of the registry. n8n is not touched. */
 export function trashProject(slug: string): string {
   if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
-  const dir = path.join(PROJECTS_DIR, slug)
+  const dir = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, slug)
   const id = `${slug}--${stamp(new Date())}`
-  const dest = path.join(TRASH_DIR, id)
+  const dest = path.join(/* turbopackIgnore: true */ TRASH_DIR, id)
   if (!isInside(PROJECTS_DIR, dir) || !isInside(TRASH_DIR, dest)) throw new Error('Refusing to move outside the projects folder.')
   fs.mkdirSync(TRASH_DIR, { recursive: true })
   moveDir(dir, dest)
@@ -418,7 +417,7 @@ export function trashProject(slug: string): string {
     const rowRe = new RegExp(`^\\|\\s*\\[${slug}\\]\\(.*(\\r?\\n)?`, 'm')
     const row = registry.match(rowRe)?.[0]
     if (row) {
-      fs.writeFileSync(path.join(dest, REGISTRY_ROW_FILE), row.trimEnd() + '\n', 'utf8')
+      fs.writeFileSync(path.join(/* turbopackIgnore: true */ dest, REGISTRY_ROW_FILE), row.trimEnd() + '\n', 'utf8')
       fs.writeFileSync(REGISTRY_FILE, registry.replace(rowRe, ''), 'utf8')
     }
   }
@@ -433,7 +432,7 @@ export function listTrash(): TrashedProject[] {
       const m = d.isDirectory() ? d.name.match(TRASH_RE) : null
       if (!m) return []
       const deleted = parseStamp(m[2])
-      const readme = readText(path.join(TRASH_DIR, d.name, 'README.md')) ?? ''
+      const readme = readText(path.join(/* turbopackIgnore: true */ TRASH_DIR, d.name, 'README.md')) ?? ''
       return [
         {
           id: d.name,
@@ -448,7 +447,7 @@ export function listTrash(): TrashedProject[] {
 }
 
 function trashPath(id: string): string {
-  const dir = path.join(TRASH_DIR, id)
+  const dir = path.join(/* turbopackIgnore: true */ TRASH_DIR, id)
   if (!TRASH_RE.test(id) || !isInside(TRASH_DIR, dir) || !fs.existsSync(dir)) throw new Error('Not in the trash.')
   return dir
 }
@@ -457,9 +456,9 @@ function trashPath(id: string): string {
 export function restoreFromTrash(id: string): string {
   const from = trashPath(id)
   const slug = id.match(TRASH_RE)![1]
-  const to = path.join(PROJECTS_DIR, slug)
+  const to = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, slug)
   if (fs.existsSync(to)) throw new Error(`A project named "${slug}" already exists. Rename or delete it first.`)
-  const rowFile = path.join(from, REGISTRY_ROW_FILE)
+  const rowFile = path.join(/* turbopackIgnore: true */ from, REGISTRY_ROW_FILE)
   const row = readText(rowFile)
   fs.rmSync(rowFile, { force: true })
   moveDir(from, to)
@@ -491,7 +490,7 @@ export type BackupStatus = { hasRepo: boolean; remotes: string[]; uncommitted: n
 /** Full git state of a project repo (see lib/git.ts). */
 export function projectRepoStatus(slug: string): RepoStatus {
   if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
-  return repoStatus(path.join(PROJECTS_DIR, slug))
+  return repoStatus(path.join(/* turbopackIgnore: true */ PROJECTS_DIR, slug))
 }
 
 /** What would be lost if this folder disappeared: is it in git, and has it left this PC? */
@@ -504,13 +503,14 @@ export function projectBackupStatus(slug: string): BackupStatus {
  * Commits a project's changes in its own repo. With `changelogLine`, the line is added to the
  * CHANGELOG under [Unreleased] first, so it goes into the same commit. Never pushes.
  */
-export async function commitProject(slug: string, message: string, opts: { changelogLine?: string; paths?: string[] } = {}) {
+export async function commitProject(slug: string, message: string, opts: { changelogLine?: string; paths?: string[]; snapshot?: string } = {}) {
   if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
-  const dir = path.join(PROJECTS_DIR, slug)
+  const dir = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, slug)
+  if (opts.snapshot && repoStatus(dir).snapshot !== opts.snapshot) throw new Error('Files changed since the preview. Refresh and review again.')
   const line = opts.changelogLine?.replace(/[\r\n]+/g, ' ').trim()
   if (line) appendChangelog(dir, `${line} (${localDate()}).`)
   const paths = opts.paths && line ? [...opts.paths, 'documentation/CHANGELOG.md'] : opts.paths
-  return commit(dir, message, paths)
+  return commit(dir, message, paths, repoStatus(dir).snapshot)
 }
 
 const execFileAsync = promisify(execFile)
@@ -534,7 +534,7 @@ export async function createProject(input: {
   website: boolean
 }): Promise<string> {
   if (!SLUG_RE.test(input.slug) || input.slug.length > 40) throw new Error('Slug must be kebab-case, max 40 characters.')
-  if (fs.existsSync(path.join(PROJECTS_DIR, input.slug))) throw new Error(`A project named "${input.slug}" already exists.`)
+  if (fs.existsSync(path.join(/* turbopackIgnore: true */ PROJECTS_DIR, input.slug))) throw new Error(`A project named "${input.slug}" already exists.`)
   const clean = (s: string) => s.replace(/[\r\n"`$]/g, ' ').trim().slice(0, 200)
 
   const args = ['--name', input.slug, '--client', clean(input.client) || 'TODO', '--purpose', clean(input.purpose) || 'TODO: one-line purpose']

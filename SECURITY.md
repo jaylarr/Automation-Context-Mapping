@@ -7,17 +7,17 @@
   DNS-rebinding attacks from web pages). Don't expose it to a network or the internet. If you put
   it behind a tunnel anyway, add the tunnel's host name to `CONTROL_CENTER_HOSTS` and protect it
   with the tunnel's own authentication.
-- **Secrets stay out of files.** n8n credentials hold API keys and tokens. The app stores its own
-  keys only in `app/.env.local` (gitignored, file mode 600). Workflow exports, commits, the client
+- **Secrets stay out of versioned exports and project content.** n8n credentials hold API keys and tokens. The app stores its own
+  keys in `app/.env.local` and explicitly created private state snapshots (gitignored, file mode 600). Workflow exports, commits, the client
   brief and test results are scanned for common secret formats and refused when one is found
-  (`app/src/lib/sanitize-core.mjs`).
+  (`app/src/lib/sanitize-core.mjs`). Unsupported binary/non-UTF-8 uploads and commits are blocked; a successful pattern scan is not proof that arbitrary text is secret-free.
 - **Client work never goes into this repo.** `n8n workflows/*` (except the template) is gitignored;
   each project has its own private repo. `AGENTS.local.md` (your name, URLs, credential names) is
   gitignored too.
 - **What the app writes to n8n:** publish/unpublish and "Restore to n8n", each only after an
   explicit, confirmed click. Everything else is read-only.
 - **Local data:** `app/data/control-center.db` holds synced execution metadata and any "captured
-  fields" you configure, which can include client data. Keep `app/data/` out of cloud-synced folders.
+  fields" you configure, which can include client data. Keep `app/data/` out of cloud-synced folders. Snapshots can contain API keys and are not encrypted. Restore journals contain operation references, not credential values.
 
 ## Reporting a vulnerability
 

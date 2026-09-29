@@ -178,6 +178,7 @@ export function saveWorkflowPrefs(instanceId: string, workflowId: string, workfl
   // New or changed captures: re-read the runs already logged (while n8n still has their data).
   if (JSON.stringify(parseCaptures(prev?.captures ?? null)) !== JSON.stringify(input.captures))
     db.prepare('UPDATE executions SET captured = NULL, captured_at = NULL WHERE instance_id = ? AND workflow_id = ?').run(instanceId, workflowId)
+  recordHealth(instanceId, new Map([[workflowId, {name: workflowName, runs: []}]]), prefsMap(instanceId))
   return fromRow(db.prepare('SELECT * FROM workflow_prefs WHERE instance_id = ? AND workflow_id = ?').get(instanceId, workflowId) as Row)
 }
 
@@ -221,7 +222,7 @@ export function recordHealth(
     `UPDATE workflow_prefs SET
        workflow_name = COALESCE(?, workflow_name),
        last_run_at = MAX(COALESCE(last_run_at, ''), COALESCE(?, '')),
-       last_success_at = NULLIF(MAX(COALESCE(last_success_at, ''), COALESCE(?, '')), ''),
+       last_success_at = ?,
        fail_streak = ?
      WHERE instance_id = ? AND workflow_id = ?`,
   )
@@ -229,17 +230,23 @@ export function recordHealth(
     for (const [workflowId, { name, runs }] of byWorkflow) {
       const p = prefs.get(prefsKey(instanceId, workflowId))
       if (!p) continue
-      const counted = runs.filter((r) => !(p.ignoreManual && r.mode === 'manual') && r.startedAt)
-      if (!counted.length) continue
+      const carry = db.prepare('SELECT through_at,fail_streak,ignore_manual,last_success_at FROM health_carry WHERE instance_id=? AND workflow_id=?').get(instanceId,workflowId) as {through_at:string;fail_streak:number;ignore_manual:number;last_success_at:string|null} | undefined
+      const counted = db.prepare(`SELECT status, mode, started_at AS startedAt FROM execution_facts
+        WHERE instance_id = ? AND workflow_id = ? AND started_at IS NOT NULL
+        AND (? = 0 OR mode IS NOT 'manual') AND started_at > ? ORDER BY started_at DESC, id DESC`).all(instanceId, workflowId, p.ignoreManual ? 1 : 0, carry?.through_at ?? '') as { status: string; startedAt: string }[]
+      if (!counted.length) {
+        if (carry) update.run(name, null, (carry.ignore_manual === (p.ignoreManual ? 1 : 0) ? carry.last_success_at : null), carry.ignore_manual === (p.ignoreManual ? 1 : 0) ? carry.fail_streak : 0, instanceId, workflowId)
+        continue
+      }
       const lastRun = counted[0].startedAt
-      const lastSuccess = counted.find((r) => r.status === 'success')?.startedAt ?? null
+      const lastSuccess = counted.find((r) => r.status === 'success')?.startedAt ?? (carry?.ignore_manual === (p.ignoreManual ? 1 : 0) ? carry.last_success_at : null)
       let streak = 0
+      let boundary = false
       for (const r of counted) {
         if (FAILED.has(r.status)) streak++
-        else if (r.status === 'success') break
+        else if (!['running', 'waiting', 'new'].includes(r.status)) { boundary = true; break }
       }
-      // No success in this window: the streak may continue from before it.
-      if (!lastSuccess && streak === counted.length) streak = Math.max(streak, p.failStreak)
+      if (!boundary && carry?.ignore_manual === (p.ignoreManual ? 1 : 0)) streak += carry.fail_streak
       update.run(name, lastRun, lastSuccess, streak, instanceId, workflowId)
     }
   })()
@@ -265,8 +272,8 @@ export function workflowAlerts(instanceId?: string | null, now = Date.now()): Wo
     if (p.alertAfterFailures && p.failStreak >= p.alertAfterFailures)
       out.push({ instanceId: p.instanceId, workflowId: p.workflowId, workflowName: name, kind: 'failing', message: `${p.failStreak} failed runs in a row`, notes: p.notes, runbookUrl: p.runbookUrl })
     if (p.expectEveryHours) {
-      const since = p.lastSuccessAt ?? p.expectSince
-      const due = since ? Date.parse(since) + p.expectEveryHours * 3_600_000 : NaN
+      const clocks = [p.lastSuccessAt, p.expectSince].map((v) => Date.parse(v ?? '')).filter(Number.isFinite)
+      const due = clocks.length ? Math.max(...clocks) + p.expectEveryHours * 3_600_000 : NaN
       if (Number.isFinite(due) && due < now)
         out.push({
           instanceId: p.instanceId,
@@ -285,7 +292,7 @@ export function workflowAlerts(instanceId?: string | null, now = Date.now()): Wo
 }
 
 /** SQL fragment that drops executions of workflows hidden from stats. Alias the executions table as `e`. */
-export const NOT_EXCLUDED_SQL = `NOT EXISTS (SELECT 1 FROM workflow_prefs wp WHERE wp.instance_id = e.instance_id AND wp.workflow_id = e.workflow_id AND wp.exclude_from_stats = 1)`
+export const NOT_EXCLUDED_SQL = `NOT EXISTS (SELECT 1 FROM workflow_prefs wp WHERE wp.instance_id = e.instance_id AND wp.workflow_id = e.workflow_id AND (wp.exclude_from_stats = 1 OR (wp.ignore_manual = 1 AND e.mode = 'manual')))`
 
 /** Same, and also hides snoozed workflows (for "recent failures" style lists). */
 export const NOT_EXCLUDED_OR_SNOOZED_SQL = `NOT EXISTS (SELECT 1 FROM workflow_prefs wp WHERE wp.instance_id = e.instance_id AND wp.workflow_id = e.workflow_id AND (wp.exclude_from_stats = 1 OR wp.snoozed_until > strftime('%Y-%m-%dT%H:%M:%fZ','now')))`

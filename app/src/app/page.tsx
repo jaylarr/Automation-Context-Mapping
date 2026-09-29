@@ -90,7 +90,7 @@ export default async function OverviewPage() {
         <Stat icon={FolderKanban} label="Active projects" value={active.length} note={`${projects.length} total`} />
         <Stat icon={Workflow} label="Workflows in repo" value={workflowCount} note="exported JSON files" />
         <Stat icon={Activity} label="Executions · 24 h" value={compact(counts.executions24h)} note={`${counts.errors24h} failed`} />
-        <Stat icon={Percent} label="Success rate · 7 d" value={percent(counts.successRate7d)} note="finished executions" />
+        <Stat icon={Percent} label="Success rate · 7 d" value={percent(counts.successRate7d)} note="observed success/error outcomes" />
         <Stat icon={Inbox} label="Events · 24 h" value={compact(counts.events24h)} note="from the webhook inbox" />
       </section>
 

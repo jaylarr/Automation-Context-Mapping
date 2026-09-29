@@ -11,3 +11,11 @@ data/*.db-*
 data/*.lock
 data/*.flag
 data/*.pending
+
+data/releases/
+data/restore-journal/
+data/*-release.json
+data/runtime.json
+data/snapshots/
+
+.next-audit-*/

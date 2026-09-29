@@ -8,6 +8,8 @@ export function GET() {
   return NextResponse.json(
     {
       ok: true,
+      releaseId: process.env.CONTROL_CENTER_RELEASE_ID || 'legacy',
+      runtimeNonce: process.env.CONTROL_CENTER_RUNTIME_NONCE || null,
       startedAt: SERVER_STARTED_AT,
       maintenanceRunning: isMaintenanceRunning(),
       lastResult: lastMaintenanceResult(),

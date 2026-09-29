@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
-import { WORKSPACE_ROOT } from './paths'
+import { WORKSPACE_ROOT, DATABASE_PATH } from './paths'
 
 /**
  * Restart / update the app from its own Settings page.
@@ -16,8 +16,8 @@ export type MaintenanceAction = 'restart' | 'update'
 
 const APP_DIR = path.join(/* turbopackIgnore: true */ process.cwd())
 const SCRIPT = path.join(WORKSPACE_ROOT, 'scripts', 'control-center.ps1')
-export const MAINTENANCE_LOG = path.join(APP_DIR, 'data', 'maintenance.log')
-const LOCK = path.join(APP_DIR, 'data', 'maintenance.lock')
+export const MAINTENANCE_LOG = path.join(path.dirname(DATABASE_PATH), 'maintenance.log')
+const LOCK = path.join(path.dirname(DATABASE_PATH), 'maintenance.lock')
 
 /** When this server process started; changes after every restart (the page polls it). */
 export const SERVER_STARTED_AT = new Date().toISOString()
@@ -71,8 +71,8 @@ export function launchMaintenance(action: MaintenanceAction): void {
   if (isMaintenanceRunning()) throw new Error('An update or restart is already running.')
 
   fs.mkdirSync(path.dirname(MAINTENANCE_LOG), { recursive: true })
-  fs.appendFileSync(MAINTENANCE_LOG, `
-===== ${new Date().toISOString()} ${action} requested from the app =====
+  fs.appendFileSync(MAINTENANCE_LOG, `
+===== ${new Date().toISOString()} ${action} requested from the app =====
 `)
 
   // cmd /s /c "<cmd>" strips only the outer quotes, so quoted paths with spaces survive.

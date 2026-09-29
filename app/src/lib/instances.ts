@@ -1,6 +1,7 @@
 import { db } from './db'
+import { randomUUID } from 'node:crypto'
 import { deleteEnvKeys, setEnvValues } from './envfile'
-import { getMeta } from './settings'
+import { getMeta, setMeta } from './settings'
 
 /**
  * n8n instances the app is connected to. Name and URL are stored in SQLite; each API key lives in
@@ -9,6 +10,7 @@ import { getMeta } from './settings'
 
 export type Instance = {
   id: string
+  uid: string
   name: string
   baseUrl: string
   hasKey: boolean
@@ -16,7 +18,7 @@ export type Instance = {
   lastSyncStatus: string | null
 }
 
-type Row = { id: string; name: string; base_url: string; created_at: string }
+type Row = { id: string; uid: string; name: string; base_url: string; created_at: string }
 
 const ID_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
@@ -63,7 +65,7 @@ function migrate(): void {
   if (migrated) return
   migrated = true
   const count = (db.prepare('SELECT COUNT(*) n FROM instances').get() as { n: number }).n
-  if (count > 0) return
+  if (count > 0 || getMeta('instancesInitialized') === 'yes') return
 
   const legacyUrl = normalizeUrl(process.env.N8N_BASE_URL || '')
   const legacyKey = process.env.N8N_API_KEY || ''
@@ -71,11 +73,13 @@ function migrate(): void {
   if (legacyUrl) {
     const name = friendlyName(legacyUrl)
     legacyId = uniqueId(name.startsWith('Local') ? 'local' : slugify(name))
-    db.prepare('INSERT INTO instances (id, name, base_url) VALUES (?, ?, ?)').run(legacyId, name, legacyUrl)
+    db.prepare('INSERT INTO instances (id, uid, name, base_url) VALUES (?, lower(hex(randomblob(16))), ?, ?)').run(legacyId, name, legacyUrl)
     if (legacyKey) setEnvValues({ [envKeyFor(legacyId)]: legacyKey })
   }
   const hasLocal = (db.prepare("SELECT COUNT(*) n FROM instances WHERE base_url LIKE '%localhost%' OR base_url LIKE '%127.0.0.1%'").get() as { n: number }).n
-  if (!hasLocal) db.prepare('INSERT INTO instances (id, name, base_url) VALUES (?, ?, ?)').run(uniqueId('local'), 'Local (Docker)', 'http://localhost:5678')
+  if (!hasLocal) db.prepare('INSERT INTO instances (id, uid, name, base_url) VALUES (?, lower(hex(randomblob(16))), ?, ?)').run(uniqueId('local'), 'Local (Docker)', 'http://localhost:5678')
+
+  setMeta('instancesInitialized', 'yes')
 
   // Old executions can't be attributed reliably (the single connection pointed at different n8ns over
   // time). Drop them; the next sync re-downloads each instance's history with the right label.
@@ -86,6 +90,7 @@ function migrate(): void {
 function toInstance(r: Row): Instance {
   return {
     id: r.id,
+    uid: r.uid,
     name: r.name,
     baseUrl: r.base_url,
     hasKey: Boolean(apiKeyFor(r.id)),
@@ -122,9 +127,9 @@ export function addInstance(input: { name: string; baseUrl: string; apiKey: stri
   const baseUrl = normalizeUrl(input.baseUrl)
   const err = validate(name, baseUrl)
   if (err) throw new Error(err)
-  const id = uniqueId(slugify(name))
-  db.prepare('INSERT INTO instances (id, name, base_url) VALUES (?, ?, ?)').run(id, name, baseUrl)
+  const id = randomUUID()
   if (input.apiKey.trim()) setEnvValues({ [envKeyFor(id)]: input.apiKey.trim() })
+  db.prepare('INSERT INTO instances (id, uid, name, base_url) VALUES (?, ?, ?, ?)').run(id, randomUUID(), name, baseUrl)
   return getInstance(id)!
 }
 
@@ -134,22 +139,35 @@ export function updateInstance(id: string, input: { name: string; baseUrl: strin
   const baseUrl = normalizeUrl(input.baseUrl)
   const err = validate(name, baseUrl)
   if (err) throw new Error(err)
-  db.prepare('UPDATE instances SET name = ?, base_url = ? WHERE id = ?').run(name, baseUrl, id)
   if (input.apiKey?.trim()) setEnvValues({ [envKeyFor(id)]: input.apiKey.trim() })
+  db.prepare('UPDATE instances SET name = ?, base_url = ? WHERE id = ?').run(name, baseUrl, id)
+  invalidateCache(id)
   return getInstance(id)!
 }
 
 export function clearInstanceKey(id: string): void {
   if (!ID_RE.test(id) || !getInstance(id)) throw new Error('Unknown instance.')
   deleteEnvKeys([envKeyFor(id)])
+  invalidateCache(id)
 }
 
 /** Removes the instance, its API key, and its synced execution history (nothing in n8n changes). */
 export function removeInstance(id: string): { executionsRemoved: number } {
   if (!ID_RE.test(id) || !getInstance(id)) throw new Error('Unknown instance.')
-  const executionsRemoved = db.prepare('DELETE FROM executions WHERE instance_id = ?').run(id).changes
-  db.prepare('DELETE FROM instances WHERE id = ?').run(id)
-  db.prepare('DELETE FROM settings WHERE key IN (?, ?)').run(`meta:lastSyncAt:${id}`, `meta:lastSyncStatus:${id}`)
   if (apiKeyFor(id) || process.env[envKeyFor(id)] !== undefined) deleteEnvKeys([envKeyFor(id)])
+  const executionsRemoved = db.transaction(() => {
+    setMeta('instancesInitialized', 'yes')
+    const removed = db.prepare('DELETE FROM executions WHERE instance_id = ?').run(id).changes
+    db.prepare('DELETE FROM workflow_prefs WHERE instance_id = ?').run(id)
+    db.prepare('DELETE FROM execution_facts WHERE instance_id = ?').run(id)
+    db.prepare('DELETE FROM health_carry WHERE instance_id = ?').run(id)
+    db.prepare('DELETE FROM instances WHERE id = ?').run(id)
+    for (const key of ['lastSyncAt','lastSyncStatus','syncCursor','syncBoundary','syncHead','syncGap']) db.prepare('DELETE FROM settings WHERE key = ?').run(`meta:${key}:${id}`)
+    return removed
+  })()
+  invalidateCache(id)
   return { executionsRemoved }
+}
+function invalidateCache(id: string): void {
+  (globalThis as unknown as { __ccWorkflowCache?: Map<string, unknown> }).__ccWorkflowCache?.delete(id)
 }

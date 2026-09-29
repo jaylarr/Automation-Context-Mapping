@@ -17,6 +17,7 @@ import { ConfirmDialog } from './confirm-dialog'
 export type InstanceView = {
   id: string
   name: string
+  uid?: string
   baseUrl: string
   hasKey: boolean
   lastSyncAt: string | null
@@ -182,6 +183,7 @@ export function InstancesManager({ instances }: { instances: InstanceView[] }) {
                     </span>
                   </span>
                   <span className="list-meta mono">{inst.baseUrl}</span>
+                  {inst.uid && <span className="list-meta mono">Installation UID: {inst.uid}</span>}
                   <span className="list-meta">
                     {inst.hasKey ? (inst.lastSyncAt ? `Last sync ${relativeTime(inst.lastSyncAt)}` : 'Not synced yet') : 'Add its API key to start syncing'}
                     {failing && <span style={{ color: 'var(--err)' }}> · {inst.lastSyncStatus?.replace(/^error: /, '')}</span>}
