@@ -87,7 +87,7 @@ function InstanceDialog({
             {instance ? `Edit “${instance.name}”` : 'Add an n8n instance'}
           </h2>
           <p className="small muted" style={{ marginTop: 'var(--s-1)' }}>
-            The app only <strong>reads</strong> from n8n (workflows and executions). The key is saved in app/.env.local, never in the database.
+            Monitoring reads workflows and executions. Explicit restore and publish actions can write to n8n after confirmation. The key is saved in app/.env.local, never in the database.
           </p>
         </div>
         <div className="field">

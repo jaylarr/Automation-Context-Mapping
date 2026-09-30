@@ -18,6 +18,10 @@ const APP_DIR = path.join(/* turbopackIgnore: true */ process.cwd())
 const SCRIPT = path.join(WORKSPACE_ROOT, 'scripts', 'control-center.ps1')
 export const MAINTENANCE_LOG = path.join(path.dirname(DATABASE_PATH), 'maintenance.log')
 const LOCK = path.join(path.dirname(DATABASE_PATH), 'maintenance.lock')
+const STATUS = path.join(path.dirname(DATABASE_PATH), 'maintenance-status.json')
+export function readMaintenanceStatus(): { state: 'running' | 'ok' | 'failed'; startedAt: string; finishedAt?: string; message?: string } | null {
+  try { return JSON.parse(fs.readFileSync(STATUS, 'utf8')) } catch { return null }
+}
 
 /** When this server process started; changes after every restart (the page polls it). */
 export const SERVER_STARTED_AT = new Date().toISOString()
@@ -51,9 +55,11 @@ export function readMaintenanceLog(lines = 40): string {
 
 /** Outcome of the most recent run, read from the log's last section. */
 export function lastMaintenanceResult(): 'ok' | 'failed' | 'unknown' {
+  const status = readMaintenanceStatus()
+  if (status?.state === 'ok' || status?.state === 'failed') return status.state
   const tail = readMaintenanceLog(60)
   const last = tail.split('=====').pop() ?? ''
-  const failed = /Build failed|rolled back|npm install failed|already running|Not answering yet/i
+  const failed = /Build failed|rolled back|Release .* failed|npm install failed|already running|Not answering yet|Candidate failed/i
   if (failed.test(last)) return 'failed'
   if (/Update complete|Running at http/i.test(last)) return 'ok'
   return 'unknown'

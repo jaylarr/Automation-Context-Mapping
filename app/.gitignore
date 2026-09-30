@@ -17,5 +17,8 @@ data/restore-journal/
 data/*-release.json
 data/runtime.json
 data/snapshots/
+data/project-operations/
+data/maintenance-status.json
+data/browser-tests/
 
 .next-audit-*/

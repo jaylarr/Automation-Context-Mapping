@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { Sidebar } from '@/components/sidebar'
 import { listInstances } from '@/lib/instances'
 import { getInstanceFilter } from '@/lib/instance-filter'
+import { connectionState } from '@/lib/connection-state'
 import './globals.css'
 
 // Everything reads live local state (SQLite + the filesystem), so never prerender.
@@ -32,13 +33,7 @@ const themeScript = `try{var t=localStorage.getItem('theme');document.documentEl
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const instances = listInstances()
   const connected = instances.filter((i) => i.hasKey)
-  const conn = !connected.length
-    ? 'off'
-    : connected.some((i) => i.lastSyncStatus?.startsWith('error'))
-      ? 'err'
-      : connected.every((i) => i.lastSyncStatus === 'ok')
-        ? 'ok'
-        : 'idle'
+  const conn = connectionState(instances)
   const filter = await getInstanceFilter()
 
   return (

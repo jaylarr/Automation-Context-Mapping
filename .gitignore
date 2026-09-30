@@ -47,3 +47,6 @@ n8n workflows/*
 n8n workflows/REGISTRY.md
 # Personal overrides for agents: your name, credential names, instance URLs
 AGENTS.local.md
+.claude/settings.local.json
+# Audit/update history is maintained outside the repository.
+Documentation/audits/

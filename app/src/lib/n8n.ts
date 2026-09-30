@@ -1,4 +1,5 @@
 import { workflowKey } from './workflow-bindings'
+import { startJob, finishJob } from './jobs'
 import { db } from './db'
 import { type Instance, apiKeyFor, connectedInstances, getInstance } from './instances'
 import { logActivity, pruneOlderThan } from './logs'
@@ -219,6 +220,7 @@ export async function syncExecutions(
 }
 
 async function syncOne(inst: Instance, trigger: 'manual' | 'auto', knownSlugs: Set<string>): Promise<SyncResult> {
+  const operation = startJob(`sync:${inst.id}`)
   const started = Date.now()
   const settings = getSettings()
   try {
@@ -410,10 +412,12 @@ async function syncOne(inst: Instance, trigger: 'manual' | 'auto', knownSlugs: S
         meta: { ...result, trigger },
       })
     }
+    finishJob(`sync:${inst.id}`, operation, 'ok', `${execs.length} executions inspected; ${inserted} inserted, ${updated} updated.`)
     return result
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
     if (!getInstance(inst.id) || getInstance(inst.id)?.baseUrl !== inst.baseUrl) throw e
+    finishJob(`sync:${inst.id}`, operation, 'failed', message)
     if (/n8n API 400/.test(message) && getMeta(`syncCursor:${inst.id}`)) setMeta(`syncCursor:${inst.id}`, '')
     setMeta(`lastSyncStatus:${inst.id}`, `error: ${message}`)
     logActivity({ level: 'error', action: 'n8n.sync', message: `${inst.name}: sync failed: ${message}`, meta: { trigger, instance: inst.id } })

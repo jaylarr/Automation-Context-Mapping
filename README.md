@@ -109,7 +109,7 @@ trigger an application rollback; the database is not automatically rolled back. 
 are private, unencrypted files under `app/data/snapshots/`; protect them like your credentials.
 
 For the first transition from the old Windows launcher, follow the
-[remediation and migration guide](Documentation/audits/2026-09-29-remediation-handoff.md).
+[operating and migration guide](Documentation/control-center-operations.md).
 The updater intentionally refuses to stop an unidentified legacy server.
 
 - Existing workflow exports need an explicit binding to their source installation before automatic

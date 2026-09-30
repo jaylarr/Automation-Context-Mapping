@@ -1,5 +1,14 @@
 'use server'
 
+import { createStateBackup, verifyStateBackup } from '@/lib/state-backups'
+import { restoreSetup, saveRestoreSetup, type RestoreSetup } from '@/lib/restore-setup'
+import { recoverProjectOperation } from '@/lib/project-operations'
+
+export async function recoverProjectOperationAction(id: string): Promise<ActionState> {
+  try { recoverProjectOperation(id); revalidatePath('/', 'layout'); return { ok: true, message: 'Recorded project change completed.' } }
+  catch (e) { return { ok: false, message: e instanceof Error ? e.message : 'Recovery failed.' } }
+}
+
 import { randomBytes } from 'node:crypto'
 import { requireSafeText, preflightFiles } from '@/lib/file-safety'
 import { revalidatePath } from 'next/cache'
@@ -11,6 +20,23 @@ import { LOG_MODES, type PrefsInput, purgeNonMatching, saveWorkflowPrefs } from 
 import { addInstance, clearInstanceKey, connectedInstances, getInstance, listInstances, removeInstance, updateInstance } from '@/lib/instances'
 import { INSTANCE_COOKIE } from '@/lib/instance-filter'
 import { cookies } from 'next/headers'
+
+export async function createStateBackupAction(): Promise<ActionState> {
+  try { const id = await createStateBackup(); revalidatePath('/settings'); return { ok: true, message: `Private app backup created and verified: ${id}` } }
+  catch (e) { return { ok: false, message: e instanceof Error ? e.message : 'Backup failed.' } }
+}
+export async function verifyStateBackupAction(id: string): Promise<ActionState> {
+  try { await verifyStateBackup(id); revalidatePath('/settings'); return { ok: true, message: 'Checksum, schema and recovery-copy integrity verified.' } }
+  catch (e) { return { ok: false, message: e instanceof Error ? e.message : 'Recovery check failed.' } }
+}
+export async function getRestoreSetupAction(slug: string, file: string, instanceId: string) {
+  try { return { ok: true, setup: restoreSetup(slug, file, instanceId) } }
+  catch (e) { return { ok: false, message: e instanceof Error ? e.message : 'Setup failed.' } }
+}
+export async function saveRestoreSetupAction(slug: string, file: string, instanceId: string, setup: RestoreSetup): Promise<ActionState> {
+  try { await saveRestoreSetup(slug, file, instanceId, setup); revalidatePath(`/projects/${slug}`); return { ok: true, message: 'References saved. Review a fresh restore preview.' } }
+  catch (e) { return { ok: false, message: e instanceof Error ? e.message : 'Mapping failed.' } }
+}
 import {
   type BackupStatus,
   STATUSES,

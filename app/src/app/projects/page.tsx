@@ -5,8 +5,10 @@ import { ProjectCardMenu } from '@/components/project-card-menu'
 import { getArchivedDisplay } from '@/lib/settings'
 import { EmptyState, PageHeader, ProjectStatusBadge } from '@/components/ui'
 import { relativeTime } from '@/lib/format'
-import { STATUSES, listProjects, projectRepoStatus } from '@/lib/projects'
-import { backupSummary } from '@/lib/git'
+import { STATUSES, listProjects } from '@/lib/projects'
+import { backupSummary, repoStatusAsync } from '@/lib/git'
+import { PROJECTS_DIR } from '@/lib/paths'
+import path from 'node:path'
 
 export const metadata: Metadata = { title: 'Projects' }
 
@@ -24,6 +26,7 @@ export default async function ProjectsPage(props: PageProps<'/projects'>) {
       ? all.filter((p) => !p.archived)
       : [...all].sort((a, b) => Number(a.archived) - Number(b.archived))
   const projects = filter ? pool.filter((p) => p.status === filter) : pool
+  const backups = new Map(await Promise.all(projects.map(async p => [p.slug, backupSummary(await repoStatusAsync(path.join(PROJECTS_DIR, p.slug)))] as const)))
   const counts = new Map<string, number>()
   for (const p of showArchived ? all : pool) counts.set(p.status, (counts.get(p.status) ?? 0) + 1)
 
@@ -73,7 +76,7 @@ export default async function ProjectsPage(props: PageProps<'/projects'>) {
       ) : (
         <section className="grid grid-cards">
           {projects.map((p) => {
-            const backup = backupSummary(projectRepoStatus(p.slug))
+            const backup = backups.get(p.slug)!
             return (
             <article key={p.slug} className="card project-card" data-archived={p.archived ? (showArchived ? 'shown' : 'dimmed') : undefined}>
               <div className="card-head">

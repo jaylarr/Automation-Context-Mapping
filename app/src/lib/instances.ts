@@ -163,6 +163,7 @@ export function removeInstance(id: string): { executionsRemoved: number } {
     db.prepare('DELETE FROM health_carry WHERE instance_id = ?').run(id)
     db.prepare('DELETE FROM instances WHERE id = ?').run(id)
     for (const key of ['lastSyncAt','lastSyncStatus','syncCursor','syncBoundary','syncHead','syncGap']) db.prepare('DELETE FROM settings WHERE key = ?').run(`meta:${key}:${id}`)
+    db.prepare('DELETE FROM settings WHERE key = ?').run(`meta:job:sync:${id}`)
     return removed
   })()
   invalidateCache(id)

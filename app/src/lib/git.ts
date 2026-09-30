@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
+import { promisify } from 'node:util'
 import { checkBytes } from './file-safety'
 
 /**
@@ -11,6 +12,7 @@ import { checkBytes } from './file-safety'
  */
 
 export type RepoStatus = {
+  inspectionError?: boolean
   snapshot?: string
   hasRepo: boolean
   /** No commit yet (a fresh `git init`). */
@@ -41,6 +43,9 @@ export function repoStatus(dir: string): RepoStatus {
   if (!fs.existsSync(path.join(/* turbopackIgnore: true */ dir, '.git'))) return NO_REPO
   const status = gitSync(dir, ['status', '--porcelain=v2', '--branch', '--untracked-files=all', '-z'])
   if (status === null) return NO_REPO
+  return parseStatus(dir, status, gitSync(dir, ['remote']) ?? '', gitSync(dir, ['log', '-1', '--format=%h%x1f%s%x1f%cI']) ?? '', true)
+}
+function parseStatus(dir: string, status: string, remotes: string, log: string, snapshot: boolean): RepoStatus {
   const out: RepoStatus = { ...NO_REPO, hasRepo: true, changed: [] }
   const records = status.split('\0')
   for (let i = 0; i < records.length; i++) {
@@ -59,12 +64,12 @@ export function repoStatus(dir: string): RepoStatus {
       i++ // the next record is the original path
     }
   }
-  out.remotes = (gitSync(dir, ['remote']) ?? '').split(/\r?\n/).filter(Boolean)
+  out.remotes = remotes.split(/\r?\n/).filter(Boolean)
   if (!out.empty) {
-    const log = gitSync(dir, ['log', '-1', '--format=%h%x1f%s%x1f%cI'])
     const [sha, subject, date] = (log ?? '').trim().split('\x1f')
     if (sha) out.lastCommit = { sha, subject, date }
   }
+  if (!snapshot) return out
   const digest = createHash('sha256').update(status)
   for (const file of out.changed) {
     digest.update(file.path)
@@ -75,8 +80,30 @@ export function repoStatus(dir: string): RepoStatus {
   return out
 }
 
+const runAsync = promisify(execFile)
+let activeChecks = 0
+const waiters: (() => void)[] = []
+/** At most four Git processes across concurrent project-grid requests. */
+async function inspect(dir: string, args: string[]): Promise<string> {
+  if (activeChecks >= 4) await new Promise<void>(resolve => waiters.push(resolve))
+  else activeChecks++
+  try { return (await runAsync('git', args, { cwd: dir, timeout: 10_000, windowsHide: true, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })).stdout }
+  finally { const next = waiters.shift(); if (next) next(); else activeChecks-- }
+}
+/** Request-scoped callers reuse the result; no stale cross-request approval snapshots. */
+export async function repoStatusAsync(dir: string): Promise<RepoStatus> {
+  if (!fs.existsSync(path.join(dir, '.git'))) return { ...NO_REPO, changed: [] }
+  try {
+    const status = await inspect(dir, ['status','--porcelain=v2','--branch','--untracked-files=all','-z'])
+    const remotes = await inspect(dir, ['remote'])
+    const log = status.includes('# branch.oid (initial)') ? '' : await inspect(dir, ['log','-1','--format=%h%x1f%s%x1f%cI'])
+    return parseStatus(dir, status, remotes, log, false)
+  } catch { return { ...NO_REPO, hasRepo: true, changed: [], inspectionError: true } }
+}
+
 /** Short, plain-language state for a badge: the most important problem first. */
 export function backupSummary(s: RepoStatus): { label: string; tone: 'ok' | 'warn' | 'err'; detail: string } {
+  if (s.inspectionError) return { label: 'check failed', tone: 'err', detail: 'Git status could not be inspected. Refresh or inspect the project repository.' }
   const parts: string[] = []
   if (!s.hasRepo) return { label: 'no git', tone: 'err', detail: 'No git repo: the folder is the only copy of this project.' }
   if (s.empty) parts.push('Nothing committed yet.')

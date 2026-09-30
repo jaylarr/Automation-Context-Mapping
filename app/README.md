@@ -16,9 +16,25 @@ cloud database.
 
 ## Remediation and rollout
 
-See [the implementation and operating guide](../Documentation/audits/2026-09-29-remediation-handoff.md) before the first upgrade. The new release runtime stages complete dependency/build directories, creates a private state snapshot, verifies the release ID, and retains the previous release. Native service transitions still need platform validation. Legacy workflow exports require explicit source-installation bindings; they are not migrated by guessing IDs.
+See [the operating guide](../Documentation/control-center-operations.md) before the first upgrade. The new release runtime stages complete dependency/build directories, creates a private state snapshot, verifies the release ID, and retains the previous release. Native service transitions still need platform validation. Legacy workflow exports require explicit source-installation bindings; they are not migrated by guessing IDs.
 
 Use Node **22.18 or later**. New attachments must be sanitized UTF-8 text; binary originals stay outside the project repository. Unsupported content is rejected before saving.
+
+## Setup, recovery and job status
+
+Settings now includes a setup checklist, background-job activity, and app recovery backups.
+Workflow exports, project Git commits, private remote backups, and app-state snapshots are
+different recovery layers. The app-backup panel creates consistent private snapshots and verifies
+independent recovery copies; it never downloads credentials to the browser or replaces the live database.
+Snapshots remain until you archive them manually. Protect them as unencrypted credential-bearing data.
+
+Restore reference setup guides manual credential verification and checks required workflow IDs.
+Saving references does not restore. New restores create unpublished workflows; a published target
+remains live when updated. Project changes interrupted between files can be resumed from Settings
+when their content still matches the recorded operation. Conflicting edits require manual review.
+
+See [Control Center operations](../Documentation/control-center-operations.md) for binding,
+recovery, test and service instructions. Audit/update evidence is maintained privately outside Git.
 
 ## Run it
 
@@ -88,6 +104,8 @@ number of history pages. Overlapping runs are deduplicated. The original backfil
 preserved so subsequent cycles can fill intervening pages; high-volume instances may still have
 incomplete history until catch-up finishes. Sync results and Settings show pending history
 separately from a successful request. Existing workflow logging preferences still apply.
+The sidebar distinguishes an initial sync from pending or incomplete history; Overview's last-sync
+timestamp follows the selected instance. Its Events card counts webhook inbox messages, not n8n executions.
 
 **Do it in the app: Settings page.** You don't need to edit any file:
 

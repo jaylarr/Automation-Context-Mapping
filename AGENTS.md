@@ -76,12 +76,18 @@ Full details: [Documentation/01-workspace-structure.md](Documentation/01-workspa
    skill. See [05-export-and-versioning.md](Documentation/05-export-and-versioning.md).
 5. **Docs are part of the deliverable.** When a workflow changes, update the project's
    `documentation/` in the same change. See
-   [09-project-documentation-standard.md](Documentation/09-project-documentation-standard.md).
+      [09-project-documentation-standard.md](Documentation/09-project-documentation-standard.md).
 6. **Ask before acting outward.** Get the owner's explicit approval before publishing or activating
    workflows, running production executions, touching client systems, sending messages,
    committing, or pushing.
 
 ## 3. Conventions (short version)
+
+**Private workspace history:** keep codebase audits, implementation plans, and update/rollout
+records outside this Git repository, in the private folder specified in `AGENTS.local.md`.
+Do not commit private operational evidence. Public README/operating instructions still belong
+in the repository. This owner requirement overrides skill defaults that put workspace audit
+reports under `Documentation/audits/`.
 
 - **Folders and files:** kebab-case, e.g. `n8n workflows/acme-lead-intake/workflows/01-intake-webhook.json`.
 - **n8n workflow names:** sentence case, verb first, with a project prefix:

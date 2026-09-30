@@ -4,12 +4,15 @@ const nextConfig: NextConfig = {
   // better-sqlite3 is a native module; keep it out of the bundle.
   serverExternalPackages: ['better-sqlite3'],
   poweredByHeader: false,
-  // scripts/control-center.ps1 update builds into .next-staging so the running app is untouched.
+  // Each staged release owns its source and dependencies, even inside the workspace.
+  turbopack: { root: process.cwd() },
+  outputFileTracingRoot: process.cwd(),
+  // Isolated validation builds can use their own output directory.
   distDir: process.env.NEXT_DIST_DIR || '.next',
   reactStrictMode: true,
   // Keep the dev badge away from the sidebar's theme toggle (bottom-left).
   devIndicators: { position: 'bottom-right' },
-  // Client-brief uploads (PDFs, screenshots) go through Server Actions; the default cap is 1 MB.
+  // UTF-8 brief/evidence attachment batches go through Server Actions.
   experimental: { serverActions: { bodySizeLimit: '100mb' } },
 }
 

@@ -8,7 +8,7 @@ import type { RepoStatus } from '@/lib/git'
 import type { Tone } from './ui'
 import { StatusBadge } from './ui'
 import { CopyButton } from './copy-button'
-import { useScrollLock } from './use-modal'
+import { useBackdropClose, useScrollLock } from './use-modal'
 
 type Props = {
   slug: string
@@ -148,6 +148,7 @@ function CommitDialog({
   const cancel = () => {
     if (!pending) onClose()
   }
+  const backdrop = useBackdropClose(ref, cancel, !pending)
 
   return (
     <dialog
@@ -158,9 +159,7 @@ function CommitDialog({
         e.preventDefault()
         cancel()
       }}
-      onClick={(e) => {
-        if (e.target === ref.current) cancel()
-      }}
+      {...backdrop}
     >
       <form
         className="dialog-body"

@@ -22,7 +22,8 @@ export async function snapshotState(repo, Database) {
     schema = restored.pragma('user_version',{simple:true})
   } finally { restored.close() }
   const env = path.join(app,'.env.local')
-  if (fs.existsSync(env)) fs.writeFileSync(path.join(directory,'.env.local'),fs.readFileSync(env),{flag:'wx',mode:0o600})
-  atomicJson(path.join(directory,'snapshot.json'),{version:1,createdAt:new Date().toISOString(),schema,databaseSha256:createHash('sha256').update(fs.readFileSync(target)).digest('hex'),includesCredentials:fs.existsSync(env),integrity:'ok'})
+  const credentials = fs.existsSync(env) ? fs.readFileSync(env) : null
+  if (credentials) fs.writeFileSync(path.join(directory,'.env.local'),credentials,{flag:'wx',mode:0o600})
+  atomicJson(path.join(directory,'snapshot.json'),{version:1,createdAt:new Date().toISOString(),schema,databaseSha256:createHash('sha256').update(fs.readFileSync(target)).digest('hex'),credentialSha256:credentials ? createHash('sha256').update(credentials).digest('hex') : undefined,includesCredentials:Boolean(credentials),integrity:'ok'})
   return directory
 }

@@ -16,7 +16,7 @@ import path from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { REPO, fail } from './lib/common.mjs'
 import { snapshotState } from './lib/state-snapshot.mjs'
-import { xml, systemdQuote, stageRelease, activeRelease, activateRelease, rollbackRelease } from './lib/releases.mjs'
+import { xml, systemdQuote, stageRelease, activeRelease, activateRelease, rollbackRelease, atomicJson } from './lib/releases.mjs'
 
 const APP = path.join(REPO, 'app')
 const DATA = path.join(APP, 'data')
@@ -209,5 +209,15 @@ if (process.platform === 'win32') {
 } else if (!commands[action]) {
   fail(`Unknown action "${action}". Use: ${Object.keys(commands).join(', ')}`)
 } else {
-  await commands[action]()
+  const tracked = ['install','update','restart'].includes(action)
+  const startedAt = new Date().toISOString()
+  const statusFile = path.join(DATA, 'maintenance-status.json')
+  if (tracked) atomicJson(statusFile, { action, state: 'running', startedAt, message: 'Requested maintenance is running.' })
+  try {
+    await commands[action]()
+    if (tracked) atomicJson(statusFile, { action, state: 'ok', startedAt, finishedAt: new Date().toISOString(), message: 'Requested maintenance completed.' })
+  } catch (e) {
+    if (tracked) atomicJson(statusFile, { action, state: 'failed', startedAt, finishedAt: new Date().toISOString(), message: e.message })
+    throw e
+  }
 }

@@ -16,6 +16,12 @@ import { ArchivedDisplaySelect } from '@/components/archived-display-select'
 import { db } from '@/lib/db'
 import { TRASH_DAYS, listTrash } from '@/lib/projects'
 import { TrashList } from '@/components/trash-list'
+import { StateBackups } from '@/components/state-backups'
+import { stateBackups } from '@/lib/state-backups'
+import { JobStatus } from '@/components/job-status'
+import { SetupChecklist } from '@/components/setup-checklist'
+import { ProjectRecovery } from '@/components/project-recovery'
+import { pendingProjectOperations } from '@/lib/project-operations'
 
 export const metadata: Metadata = { title: 'Settings' }
 
@@ -39,6 +45,10 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings" description="Connections, sync behavior, and the local database. Keys you save here are written to app/.env.local (gitignored), never to the database." />
+      <SetupChecklist />
+      <JobStatus />
+      <StateBackups backups={stateBackups()} />
+      <ProjectRecovery operations={pendingProjectOperations()} />
 
       <section className="grid grid-main-side">
         <div className="card" id="instances">
@@ -88,6 +98,10 @@ export default function SettingsPage() {
           <h2>Backups</h2>
           <StatusBadge status={settings.autoExportHours ? `every ${settings.autoExportHours} h` : 'auto-export off'} tone={settings.autoExportHours ? 'ok' : 'warn'} />
         </div>
+        <p className="small muted">
+          Workflow exports preserve definitions. Git commits preserve project versions. A private remote stores those commits away from this computer.
+          App recovery backups above preserve local settings, history and credentials.
+        </p>
         <p className="small muted">
           Each project has its own private git repo. Commit from a project&rsquo;s page, or let the app export workflows that changed in n8n on a
           schedule (optionally committing them). Pushing to a remote is always a manual step.

@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { Loader2, Upload } from 'lucide-react'
 import { type ActionState, previewRestoreAction, restoreWorkflowAction } from '@/app/actions'
 import type { RestorePreview } from '@/lib/restore'
-import { useScrollLock } from './use-modal'
+import { useBackdropClose, useScrollLock } from './use-modal'
+import { RestoreSetupForm } from './restore-setup'
 
 const PHRASE = 'restore'
 
@@ -21,6 +22,8 @@ export function RestoreButton({ slug, file, instances }: { slug: string; file: s
   const [result, setResult] = useState<ActionState>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, start] = useTransition()
+  const [settingUp, setSettingUp] = useState(false)
+  const [revision, setRevision] = useState(0)
   const router = useRouter()
   useScrollLock(open)
 
@@ -48,12 +51,13 @@ export function RestoreButton({ slug, file, instances }: { slug: string; file: s
     return () => {
       live = false
     }
-  }, [open, instanceId, slug, file])
+  }, [open, instanceId, slug, file, revision])
 
   const close = () => {
     if (!pending) setOpen(false)
   }
   const blocked = !instanceId || !preview ||Boolean(preview.problem) || (preview.published && typed !== PHRASE)
+  const backdrop = useBackdropClose(ref, close, !pending)
 
   if (!instances.length) return null
   return (
@@ -74,9 +78,7 @@ export function RestoreButton({ slug, file, instances }: { slug: string; file: s
           e.preventDefault()
           close()
         }}
-        onClick={(e) => {
-          if (e.target === ref.current) close()
-        }}
+        {...backdrop}
       >
         <form
           className="dialog-body"
@@ -96,13 +98,14 @@ export function RestoreButton({ slug, file, instances }: { slug: string; file: s
             Restore to n8n
           </h2>
           <p className="small muted">
-            Sends <code>workflows/{file}</code> back to n8n. It is <strong>never published</strong>: check its credentials in n8n, then publish there
-            yourself. The API restores nodes, connections, name, and supported settings. Tags, description, and node groups remain in the backup.
+            Restores <code>workflows/{file}</code> to the selected installation. New workflows are created unpublished.
+            An existing published target remains published, and restoring can change what runs live.
+            The API restores nodes, connections, name, and supported settings. Tags, description, and node groups remain in the backup.
           </p>
           {instances.length > 1 && (
             <div className="field">
-              <label htmlFor={`restore-${file}-instance`}>Instance</label>
-              <select id={`restore-${file}-instance`} className="input" value={instanceId} onChange={(e) => setInstanceId(e.target.value)}>
+              <label htmlFor={`restore-${file}-instance`}>Step 1: target installation</label>
+              <select disabled={pending} id={`restore-${file}-instance`} className="input" value={instanceId} onChange={(e) => { setInstanceId(e.target.value); setPreview(null); setSettingUp(false) }}>
                 <option value="" disabled>
                   Choose the n8n instance…
                 </option>
@@ -114,14 +117,17 @@ export function RestoreButton({ slug, file, instances }: { slug: string; file: s
               </select>
             </div>
           )}
+          {instanceId && <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => setSettingUp(!settingUp)}>{settingUp ? 'Close reference setup' : 'Set up credential and workflow references'}</button>}
+          {settingUp && instanceId && <RestoreSetupForm key={instanceId} slug={slug} file={file} instanceId={instanceId} onSaved={() => { setSettingUp(false); setRevision(n => n + 1) }} />}
           {checking && (
             <p className="small muted row" style={{ gap: 'var(--s-2)' }}>
               <Loader2 size={14} aria-hidden style={{ animation: 'spin 0.9s linear infinite' }} /> Checking n8n…
             </p>
           )}
-          {preview && (
+          {preview && !settingUp && (
             <div className="small stack-sm">
               <p>
+                <strong>Step 3: review and confirm. </strong>
                 {preview.action === 'update' ? (
                   <>
                     <strong>Updates</strong> &ldquo;{preview.name}&rdquo; on {preview.instance}, replacing its current version (n8n keeps the old one in its
@@ -161,7 +167,7 @@ export function RestoreButton({ slug, file, instances }: { slug: string; file: s
             <button type="button" className="btn btn-ghost" onClick={close} disabled={pending}>
               Cancel
             </button>
-            <button type="submit" className={`btn ${preview?.published ? 'btn-warn' : 'btn-primary'}`} disabled={pending || checking || blocked}>
+            <button type="submit" className={`btn ${preview?.published ? 'btn-warn' : 'btn-primary'}`} disabled={pending || checking || blocked || settingUp}>
               {pending ? <Loader2 aria-hidden style={{ animation: 'spin 0.9s linear infinite' }} /> : <Upload aria-hidden />}
               {preview?.action === 'create' ? 'Create in n8n' : 'Restore'}
             </button>

@@ -8,6 +8,9 @@ import { type RepoStatus, commit, repoStatus } from './git'
 import { appendChangelog, localDate } from './changelog'
 import { type BriefState, briefState } from './brief'
 import { INFO_LIMITS } from './project-info'
+import { projectOperation } from './project-operations'
+import { atomicWrite } from './file-safety'
+import { cache } from 'react'
 
 export { SLUG_RE }
 
@@ -245,7 +248,7 @@ function readProject(slug: string): Project | null {
   }
 }
 
-export function listProjects(): Project[] {
+export const listProjects = cache(function listProjects(): Project[] {
   if (!fs.existsSync(PROJECTS_DIR)) return []
   return fs
     .readdirSync(PROJECTS_DIR, { withFileTypes: true })
@@ -253,7 +256,7 @@ export function listProjects(): Project[] {
     .map((d) => readProject(d.name))
     .filter((p): p is Project => p !== null)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-}
+})
 
 /** n8n workflow id -> project slug, for every workflow JSON saved in a project's workflows/ folder. */
 export function workflowProjects(): Map<string, string> {
@@ -334,9 +337,7 @@ export function updateProjectInfo(slug: string, patch: Partial<ProjectInfo>): Pr
     if (clean[key] !== undefined) expected[key] = [infoValue(md, key), clean[key] || (INFO_ROWS[key].code ? '' : '—')]
   const failed = Object.entries(expected).filter(([, [got, want]]) => got !== want).map(([k]) => k)
   if (failed.length) throw new Error(`Couldn’t update ${failed.join(', ')} in README.md. Check the format of its info table.`)
-  fs.writeFileSync(readmePath, md, 'utf8')
-
-  const saved = getProject(slug)!
+  const writes = [{ file: readmePath, after: md }]
   // Registry columns: Project | Client | Status | Started | Purpose. Only the edited ones change.
   const registry = readText(REGISTRY_FILE)
   if (registry) {
@@ -351,8 +352,10 @@ export function updateProjectInfo(slug: string, patch: Partial<ProjectInfo>): Pr
       }
       return `| ${cells.join(' | ')} |`
     })
-    if (next !== registry) fs.writeFileSync(REGISTRY_FILE, next, 'utf8')
+    if (next !== registry) writes.push({ file: REGISTRY_FILE, after: next })
   }
+  projectOperation(`Update details: ${slug}`, writes)
+  const saved = getProject(slug)!
   return { name: saved.name, purpose: saved.purpose, client: saved.client, status: saved.status as Status, version: saved.version, started: saved.started }
 }
 
@@ -365,7 +368,7 @@ export function setProjectStatus(slug: string, status: Status): void {
 export function setProjectArchived(slug: string, archived: boolean): void {
   if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
   const marker = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, slug, ARCHIVE_MARKER)
-  if (archived) fs.writeFileSync(marker, new Date().toISOString() + '\n', 'utf8')
+  if (archived) atomicWrite(marker, new Date().toISOString() + '\n')
   else fs.rmSync(marker, { force: true })
 }
 
@@ -391,17 +394,6 @@ function parseStamp(s: string): Date {
   return new Date(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T${s.slice(9, 11)}:${s.slice(11, 13)}:${s.slice(13, 15)}Z`)
 }
 
-/** Rename, or copy + remove when Windows refuses the rename (a file open in an editor, antivirus). */
-function moveDir(from: string, to: string): void {
-  try {
-    fs.renameSync(from, to)
-  } catch (e) {
-    if (!['EPERM', 'EACCES', 'EBUSY', 'EXDEV'].includes((e as NodeJS.ErrnoException).code ?? '')) throw e
-    fs.cpSync(from, to, { recursive: true })
-    fs.rmSync(from, { recursive: true, force: true })
-  }
-}
-
 /** Moves the project folder to the trash and takes its row out of the registry. n8n is not touched. */
 export function trashProject(slug: string): string {
   if (!getProject(slug)) throw new Error(`Unknown project: ${slug}`)
@@ -410,17 +402,17 @@ export function trashProject(slug: string): string {
   const dest = path.join(/* turbopackIgnore: true */ TRASH_DIR, id)
   if (!isInside(PROJECTS_DIR, dir) || !isInside(TRASH_DIR, dest)) throw new Error('Refusing to move outside the projects folder.')
   fs.mkdirSync(TRASH_DIR, { recursive: true })
-  moveDir(dir, dest)
-
+  const writes: { file: string; after: string }[] = []
   const registry = readText(REGISTRY_FILE)
   if (registry) {
     const rowRe = new RegExp(`^\\|\\s*\\[${slug}\\]\\(.*(\\r?\\n)?`, 'm')
     const row = registry.match(rowRe)?.[0]
     if (row) {
-      fs.writeFileSync(path.join(/* turbopackIgnore: true */ dest, REGISTRY_ROW_FILE), row.trimEnd() + '\n', 'utf8')
-      fs.writeFileSync(REGISTRY_FILE, registry.replace(rowRe, ''), 'utf8')
+      writes.push({ file: path.join(dest, REGISTRY_ROW_FILE), after: row.trimEnd() + '\n' })
+      writes.push({ file: REGISTRY_FILE, after: registry.replace(rowRe, '') })
     }
   }
+  projectOperation(`Move to trash: ${slug}`, writes, { from: dir, to: dest })
   return id
 }
 
@@ -460,12 +452,14 @@ export function restoreFromTrash(id: string): string {
   if (fs.existsSync(to)) throw new Error(`A project named "${slug}" already exists. Rename or delete it first.`)
   const rowFile = path.join(/* turbopackIgnore: true */ from, REGISTRY_ROW_FILE)
   const row = readText(rowFile)
-  fs.rmSync(rowFile, { force: true })
-  moveDir(from, to)
+  const writes: { file: string; after: string }[] = []
   if (row) {
     const registry = readText(REGISTRY_FILE)
-    if (registry !== null && !registry.includes(`[${slug}](`)) fs.writeFileSync(REGISTRY_FILE, `${registry.replace(/\n*$/, '\n')}${row}`, 'utf8')
+    if (registry !== null && !registry.includes(`[${slug}](`)) writes.push({ file: REGISTRY_FILE, after: `${registry.replace(/\n*$/, '\n')}${row}` })
   }
+  projectOperation(`Restore project: ${slug}`, writes, { from, to })
+  // Keep the recovery row through the move and registry update.
+  fs.rmSync(path.join(to, REGISTRY_ROW_FILE), { force: true })
   return slug
 }
 

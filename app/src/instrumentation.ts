@@ -10,11 +10,15 @@ export async function register() {
 
   const { getSettings, getMeta } = await import('./lib/settings')
   const { isConfigured, syncExecutions } = await import('./lib/n8n')
+  const { connectedInstances } = await import('./lib/instances')
   const { listProjects } = await import('./lib/projects')
   const { logActivity, pruneOlderThan } = await import('./lib/logs')
+  const { startJob, finishJob, jobCanRetry } = await import('./lib/jobs')
   const prune = () => {
-    try { pruneOlderThan(getSettings().retentionDays) }
-    catch { logActivity({ level: 'error', action: 'retention.failed', message: 'Local log retention failed; will retry.' }) }
+    if (!jobCanRetry('retention')) return
+    const operation = startJob('retention')
+    try { pruneOlderThan(getSettings().retentionDays); finishJob('retention', operation, 'ok', 'Retention completed.') }
+    catch { finishJob('retention', operation, 'failed', 'Local log retention failed; will retry.'); logActivity({ level: 'error', action: 'retention.failed', message: 'Local log retention failed; will retry.' }) }
   }
   prune()
   setInterval(prune, 60 * 60_000).unref()
@@ -53,7 +57,8 @@ export async function register() {
       if (!syncIntervalMinutes || !isConfigured()) return
       const last = Date.parse(getMeta('lastSyncAt') ?? '') || 0
       if (Date.now() - last < syncIntervalMinutes * 60_000) return
-      syncExecutions('auto', listProjects().map((p) => p.slug)).catch(() => {
+      const slugs = listProjects().map((p) => p.slug)
+      for (const inst of connectedInstances().filter(i => jobCanRetry(`sync:${i.id}`))) syncExecutions('auto', slugs, inst.id).catch(() => {
         /* failure is recorded in the activity log */
       })
     } catch {

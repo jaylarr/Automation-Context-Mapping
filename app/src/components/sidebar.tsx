@@ -38,6 +38,9 @@ const CONN_LABEL = {
   ok: (n: number) => (n > 1 ? `${n} n8n instances connected` : 'n8n connected'),
   err: () => 'n8n sync failing',
   idle: () => 'n8n connected, not synced yet',
+  backfill: () => 'n8n connected, history syncing',
+  incomplete: () => 'n8n connected, history incomplete',
+  partial: () => 'Some n8n instances not synced yet',
   off: () => 'n8n not configured',
 } as const
 
@@ -110,7 +113,7 @@ export function Sidebar({
           </div>
         )}
         <Link href="/settings#instances" className="conn">
-          <span className="dot" data-tone={conn === 'ok' ? 'ok' : conn === 'err' ? 'err' : undefined} />
+          <span className="dot" data-tone={conn === 'ok' ? 'ok' : conn === 'err' ? 'err' : ['backfill', 'incomplete', 'partial'].includes(conn) ? 'warn' : undefined} />
           {CONN_LABEL[conn](connectedCount)}
         </Link>
         <ThemeToggle />

@@ -1,0 +1,123 @@
+#!/usr/bin/env node
+// Production-build smoke tests. Always use a disposable workspace/database and a GET-only mock n8n.
+import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
+import http from 'node:http'
+import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
+import { spawn, spawnSync } from 'node:child_process'
+const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..')
+const app=process.env.CONTROL_CENTER_TEST_APP || path.join(repo,'app')
+const require=createRequire(path.join(app,'package.json'))
+const { chromium }=require('playwright')
+const Database=require('better-sqlite3')
+const root=fs.mkdtempSync(path.join(os.tmpdir(),'cc-browser-'))
+const artifacts=path.join(repo,'app','data','browser-tests')
+fs.mkdirSync(artifacts,{recursive:true})
+fs.cpSync(path.join(repo,'scripts'),path.join(root,'scripts'),{recursive:true})
+fs.cpSync(path.join(repo,'Documentation','templates'),path.join(root,'Documentation','templates'),{recursive:true})
+fs.cpSync(path.join(repo,'n8n workflows','_template'),path.join(root,'n8n workflows','_template'),{recursive:true})
+const init=spawnSync(process.execPath,[path.join(root,'scripts','new-project.mjs'),'--name','browser-fixture','--client','Fictional fixture','--no-website'],{encoding:'utf8'})
+assert.equal(init.status,0,init.stderr)
+const wf={id:'fixture-workflow',name:'[browser-fixture] Fixture workflow',active:true,nodes:[{id:'http-node',name:'Fixture HTTP',type:'n8n-nodes-base.httpRequest',typeVersion:4,position:[0,0],parameters:{},credentials:{httpHeaderAuth:{id:'fixture-credential',name:'Fixture header'}}}],connections:{},settings:{}}
+const project=path.join(root,'n8n workflows','browser-fixture')
+fs.writeFileSync(path.join(project,'workflows','01-fixture.json'),JSON.stringify(wf))
+fs.writeFileSync(path.join(project,'documentation','workflow-bindings.json'),JSON.stringify({version:1,workflows:[{key:'fixture-binding',file:'01-fixture.json',source:{installation:'fixture-source',workflowId:wf.id},targets:[]}]}))
+let writes=0
+const mock=http.createServer((req,res)=>{
+  res.setHeader('content-type','application/json')
+  if(req.method!=='GET'){writes++;res.writeHead(405);res.end('{}');return}
+  if(req.url.startsWith('/api/v1/workflows/'+wf.id))res.end(JSON.stringify(wf))
+  else res.end(JSON.stringify({data:req.url.startsWith('/api/v1/workflows')?[wf]:[]}))
+})
+await new Promise(resolve=>mock.listen(0,'127.0.0.1',resolve))
+const mockURL=`http://127.0.0.1:${mock.address().port}`
+const envFile=path.join(root,'.env.local')
+fs.writeFileSync(envFile,'N8N_API_KEY__FIXTURE_A=fixture-placeholder\nN8N_API_KEY__FIXTURE_B=fixture-placeholder\n')
+process.env.WORKSPACE_ROOT=root
+process.env.DATABASE_PATH=path.join(root,'app','data','fixture.db')
+process.env.CONTROL_CENTER_ENV_FILE=envFile
+process.env.CONTROL_CENTER_BACKGROUND='off'
+await import('../app/src/lib/test-loader.mjs')
+const { db }=await import('../app/src/lib/db.ts')
+for(const [id,uid,name] of [['fixture-a','fixture-source','Fixture A'],['fixture-b','fixture-target','Fixture B']]) db.prepare('INSERT INTO instances(id,uid,name,base_url) VALUES(?,?,?,?)').run(id,uid,name,mockURL)
+db.close()
+// Ask the OS for a free local port, then give it to the owned Next child.
+const reserve=http.createServer();await new Promise(resolve=>reserve.listen(0,'127.0.0.1',resolve))
+const port=reserve.address().port;await new Promise(resolve=>reserve.close(resolve))
+const log=fs.openSync(path.join(artifacts,'server.log'),'w')
+const child=spawn(process.execPath,[path.join(app,'node_modules','next','dist','bin','next'),'start','-H','127.0.0.1','-p',String(port)],{cwd:app,windowsHide:true,stdio:['ignore',log,log],env:{...process.env,NODE_ENV:'production',DATABASE_PATH:path.join(root,'app','data','fixture.db'),N8N_API_KEY__FIXTURE_A:'fixture-placeholder',N8N_API_KEY__FIXTURE_B:'fixture-placeholder',CONTROL_CENTER_OFFLINE:'0',CONTROL_CENTER_BACKGROUND:'off',CONTROL_CENTER_RELEASE_ID:'browser-fixture'}})
+fs.closeSync(log)
+let browser
+try {
+  const url=`http://127.0.0.1:${port}`
+  let ready=false
+  for(let n=0;n<90;n++){try{ready=(await fetch(url+'/api/health')).ok}catch{}if(ready)break;await new Promise(r=>setTimeout(r,500))}
+  assert.equal(ready,true,'Fixture server failed to start; inspect app/data/browser-tests/server.log')
+  browser=await chromium.launch({headless:true,...(process.env.CONTROL_CENTER_BROWSER_CHANNEL?{channel:process.env.CONTROL_CENTER_BROWSER_CHANNEL}:{})})
+  const context=await browser.newContext({viewport:{width:1440,height:960}})
+  const page=await context.newPage();page.setDefaultTimeout(15_000)
+  const errors=[];page.on('pageerror',e=>errors.push(e.message))
+  await page.goto(url+'/settings')
+  await page.getByRole('button',{name:'Switch to light theme'}).click()
+  assert.equal(await page.locator('html').getAttribute('data-theme'),'light')
+  await page.getByRole('heading',{name:'App recovery backups'}).waitFor()
+  await page.getByRole('button',{name:'Create app backup',exact:true}).click()
+  await page.getByText(/Private app backup created and verified/).waitFor()
+  await page.getByRole('button',{name:'Verify recovery copy',exact:true}).first().click()
+  await page.getByText('Checksum, schema and recovery-copy integrity verified.').waitFor()
+  await page.getByRole('button',{name:'Paused',exact:true}).click()
+  assert.equal(await page.getByRole('button',{name:'Live',exact:true}).getAttribute('aria-pressed'),'true')
+  await page.screenshot({path:path.join(artifacts,'settings-desktop.png'),fullPage:true})
+  await page.goto(url+'/projects/browser-fixture')
+  await page.getByRole('button',{name:'Restore 01-fixture.json to n8n',exact:true}).click()
+  const dialog=page.getByRole('dialog')
+  await dialog.getByLabel('Step 1: target installation').selectOption('fixture-a')
+  await dialog.getByRole('button',{name:'Set up credential and workflow references'}).click()
+  await dialog.getByLabel('I verified this credential in Fixture A').check()
+  await dialog.getByRole('button',{name:'Save references and preview'}).click()
+  await dialog.getByText('This workflow is', {exact:false}).waitFor()
+  assert.equal(await dialog.getByRole('button',{name:'Restore',exact:true}).isDisabled(),true)
+  await dialog.getByLabel('Type restore to confirm').fill('restore')
+  assert.equal(await dialog.getByRole('button',{name:'Restore',exact:true}).isEnabled(),true)
+  // Never click the remote-write confirmation in a smoke suite.
+  await page.screenshot({path:path.join(artifacts,'restore-desktop.png'),fullPage:true})
+  await page.keyboard.press('Escape')
+  assert.equal(await page.locator('dialog[open]').count(),0)
+  const upload=page.locator('input[type=file]').first()
+  await upload.setInputFiles({name:'fixture.txt',mimeType:'text/plain',buffer:Buffer.from('Sanitized fixture evidence')})
+  await page.getByRole('link',{name:'fixture.txt',exact:true}).waitFor()
+  await upload.setInputFiles({name:'unsafe.bin',mimeType:'application/octet-stream',buffer:Buffer.from([0,1,2])})
+  await page.getByText(/binary content cannot be checked/).waitFor()
+  await page.goto(url+'/projects/new')
+  await page.getByLabel('Client',{exact:true}).fill('Fictional browser client')
+  await page.getByLabel('Project slug',{exact:true}).fill('created-fixture')
+  await page.getByLabel('Include a website/ folder').uncheck()
+  await page.getByRole('button',{name:'Create project',exact:true}).click()
+  await page.waitForURL('**/projects/created-fixture')
+  assert.equal(fs.existsSync(path.join(root,'n8n workflows','created-fixture','README.md')),true)
+  await page.goto(url+'/settings')
+  await page.getByLabel('Showing',{exact:true}).selectOption('fixture-b')
+  await page.waitForFunction(()=>document.cookie.includes('instance') || document.querySelector('#instance-filter')?.value==='fixture-b')
+  for(let n=0;n<20;n++){if((await context.cookies()).some(c=>c.value==='fixture-b'))break;await page.waitForTimeout(100)}
+  assert.ok((await context.cookies()).some(c=>c.value==='fixture-b'))
+  await context.close()
+  const mobile=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,reducedMotion:'reduce',colorScheme:'dark'})
+  const phone=await mobile.newPage();await phone.goto(url+'/settings')
+  assert.ok(await phone.getByRole('heading',{name:'Setup checklist'}).isVisible())
+  assert.ok(await phone.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Mobile page overflows horizontally')
+  await phone.screenshot({path:path.join(artifacts,'settings-mobile-dark.png'),fullPage:true})
+  await mobile.close()
+  assert.deepEqual(errors,[],'Browser runtime errors')
+  assert.equal(writes,0,'Smoke tests must not write to the mock n8n API')
+  console.log('Browser smoke passed: private backup/recovery, restore setup/live confirmation, modal Escape, text upload/binary rejection, project creation, instance filter, desktop/mobile/dark/reduced motion. No n8n writes.')
+} finally {
+  if(browser)await browser.close()
+  child.kill()
+  await Promise.race([new Promise(resolve=>child.exitCode!==null || child.signalCode!==null?resolve():child.once('exit',resolve)),new Promise(resolve=>setTimeout(resolve,5000))])
+  if(child.exitCode===null && child.signalCode===null)throw new Error('Fixture child did not stop; inspect the owned process before cleanup.')
+  await new Promise(resolve=>mock.close(resolve))
+  fs.rmSync(root,{recursive:true,force:true})
+}

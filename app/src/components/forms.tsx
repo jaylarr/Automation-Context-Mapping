@@ -103,7 +103,7 @@ export function NewProjectForm({ initialSlug = '' }: { initialSlug?: string }) {
       <div className="field">
         <label htmlFor="files">Files from the client (optional)</label>
         <input id="files" name="files" type="file" multiple className="input" style={{ paddingTop: '0.4rem' }} />
-        <span className="hint">Emails, PDFs, screenshots, example sheets. Up to 25 MB each, saved to <code>client-brief/files/</code>.</span>
+        <span className="hint">Sanitized UTF-8 text extracts. Binary originals stay outside the repository. Up to 25 MB each, saved to <code>client-brief/files/</code>.</span>
       </div>
       <label className="check">
         <input type="checkbox" name="website" defaultChecked /> Include a <code>website/</code> folder

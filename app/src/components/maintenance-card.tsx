@@ -39,10 +39,9 @@ const COPY: Record<Action, { title: string; confirm: string; body: React.ReactNo
     confirm: 'Update & rebuild',
     body: (
       <>
-        <p>Builds the latest code into a separate folder while the app keeps working (about 30–60 seconds).</p>
+        <p>Installs dependencies, runs checks and builds the latest code in a separate release. This can take several minutes while the app keeps working.</p>
         <p>
-          If the build succeeds, the app restarts on the new version (about 10 seconds offline). If it fails, nothing changes and
-          the error is shown here.
+          A verified app-state backup is created before activation. If the candidate fails its health check, the updater attempts to restore the previous application release. The database is not rolled back automatically.
         </p>
       </>
     ),
@@ -55,7 +54,6 @@ export function MaintenanceCard({ available, reason, log }: { available: boolean
   const baseline = useRef<string | null>(null)
 
   const poll = useCallback(async (action: Action, since: number) => {
-    let sawRunning = false
     for (;;) {
       await new Promise((r) => setTimeout(r, 2000))
       if (Date.now() - since > TIMEOUT_MS) {
@@ -67,15 +65,14 @@ export function MaintenanceCard({ available, reason, log }: { available: boolean
         setPhase({ kind: 'working', action, step: 'Restarting… the app is briefly offline', since })
         continue
       }
-      if (h.maintenanceRunning) sawRunning = true
       if (h.startedAt !== baseline.current) {
         setPhase({ kind: 'working', action, step: 'Back online. Reloading…', since })
         window.location.reload()
         return
       }
       // Same server still running: an update is still building, or it failed and was left untouched.
-      if (sawRunning && !h.maintenanceRunning && h.lastResult === 'failed') {
-        setPhase({ kind: 'failed', message: 'The update failed. The running version was left untouched. Details are in the maintenance log below.' })
+      if (!h.maintenanceRunning && h.lastResult === 'failed') {
+        setPhase({ kind: 'failed', message: 'Maintenance failed. Check the log for build, activation or rollback results.' })
         return
       }
       if (action === 'update' && h.maintenanceRunning)

@@ -15,7 +15,8 @@ import { getMeta } from '@/lib/settings'
 
 export default async function OverviewPage() {
   const instanceFilter = await getInstanceFilter()
-  const instanceName = instanceFilter ? listInstances().find((i) => i.id === instanceFilter)?.name : null
+  const selectedInstance = instanceFilter ? listInstances().find((i) => i.id === instanceFilter) : null
+  const instanceName = selectedInstance?.name
   const projects = listProjects()
   const counts = overviewCounts(instanceFilter)
   const perDay = executionsPerDay(14, instanceFilter)
@@ -24,7 +25,7 @@ export default async function OverviewPage() {
   const events = recentEvents(6)
   const activity = recentActivity(6)
   const configured = isConfigured()
-  const lastSync = getMeta('lastSyncAt')
+  const lastSync = instanceFilter ? selectedInstance?.lastSyncAt : getMeta('lastSyncAt')
   const workflowCount = projects.reduce((n, p) => n + p.workflows.length, 0)
   const active = projects.filter((p) => !['archived', 'paused'].includes(p.status))
 

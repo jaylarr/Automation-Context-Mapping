@@ -14,6 +14,15 @@ $runtime = Join-Path $PSScriptRoot 'control-center-runtime.mjs'
 $releaseScript = Join-Path $PSScriptRoot 'control-center-release.mjs'
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 function Say([string]$message) { Write-Host "$(Get-Date -Format s) $message" }
+$statusFile = Join-Path $dataDir 'maintenance-status.json'
+$statusStart = [DateTime]::UtcNow.ToString('o')
+function Write-MaintenanceStatus([string]$state, [string]$message) {
+  $record = @{ action = $Action; state = $state; startedAt = $statusStart; message = $message }
+  if ($state -ne 'running') { $record.finishedAt = [DateTime]::UtcNow.ToString('o') }
+  $temp = "$statusFile.$PID.tmp"
+  [IO.File]::WriteAllText($temp, ($record | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+  if (Test-Path -LiteralPath $statusFile) { [IO.File]::Replace($temp, $statusFile, $null) } else { [IO.File]::Move($temp, $statusFile) }
+}
 function Test-Up([string]$release = '') {
   try {
     $health = Invoke-RestMethod -Uri "$url/api/health" -TimeoutSec 3
@@ -53,6 +62,7 @@ function Update-Server {
     $bytes = [Text.Encoding]::UTF8.GetBytes([string]$PID)
     $stream.Write($bytes, 0, $bytes.Length)
     $stream.Flush()
+    Write-MaintenanceStatus 'running' 'Installing dependencies and checking the isolated candidate.'
     Invoke-Release 'stage'
     $candidate = Get-Content -LiteralPath (Join-Path $dataDir 'candidate-release.json') -Raw | ConvertFrom-Json
     $stopped = $false
@@ -63,6 +73,7 @@ function Update-Server {
       Invoke-Release 'activate'
       $activated = $true
       Start-Server
+      Write-MaintenanceStatus 'running' 'Checking the new release health.'
       if (-not (Wait-Up $candidate.id)) { throw 'Candidate failed release-specific health verification.' }
       Say "Update complete. Running release $($candidate.id) at $url"
     } catch {
@@ -79,6 +90,8 @@ function Update-Server {
     }
   } finally { $stream.Dispose(); Remove-Item -LiteralPath $lock -Force }
 }
+try {
+if ($Action -eq 'restart') { Write-MaintenanceStatus 'running' 'Restarting the owned Control Center runtime.' }
 switch ($Action) {
   'run' { & node $runtime; exit $LASTEXITCODE }
   'install' {
@@ -98,4 +111,9 @@ switch ($Action) {
   'logs' { Get-Content -LiteralPath (Join-Path $dataDir 'server.log') -Tail 60 -ErrorAction SilentlyContinue }
   'open' { Start-Process $url }
   'uninstall' { Stop-Server; Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue; Say 'Service removed; releases and data retained.' }
+}
+if ($Action -in @('update','install','restart')) { Write-MaintenanceStatus 'ok' 'Requested maintenance completed and health checked.' }
+} catch {
+  if ($Action -in @('update','install','restart')) { Write-MaintenanceStatus 'failed' $_.Exception.Message }
+  throw
 }

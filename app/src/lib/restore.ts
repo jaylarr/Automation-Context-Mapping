@@ -23,7 +23,7 @@ function read(slug: string, file: string) {
   const problem = findHardcodedSecret(wf) || checkImportable(wf).join('; ')
   if (problem) throw new Error(`Not restored: ${problem}`)
   const binding = readBindings(slug).workflows.find((b) => b.file === file)
-  if (!binding) throw new Error('Source installation is unresolved. Create an explicit workflow binding before restoring (see the remediation guide).')
+  if (!binding) throw new Error('Source installation is unresolved. Create an explicit workflow binding before restoring (see the app README).')
   const mappingPath = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, slug, 'documentation', 'restore-mappings.json')
   const mappings = fs.existsSync(mappingPath) ? JSON.parse(fs.readFileSync(mappingPath, 'utf8')) as Record<string, Mapping> : {}
   return { wf, binding, mappings, hash: hash({ raw, binding, mappings }) }
@@ -56,7 +56,7 @@ export async function previewRestore(slug: string, file: string, instanceId: str
       if (!credential.id) throw new Error('A credential reference has no ID.')
       {
         const mapped = mapping.credentials?.[`${type}:${credential.id}`]
-        if (!mapped?.verified || !mapped.id || !mapped.name) throw new Error(`Map and verify credential type ${type} in documentation/restore-mappings.json before restoring across installations.`)
+        if (!mapped?.verified || !mapped.id || !mapped.name) throw new Error(`Set up and verify credential type ${type} with the reference setup button before restoring.`)
         if (same && mapped.id !== credential.id) throw new Error('A same-installation credential mapping must preserve its ID.')
         refs![type] = { id: mapped.id, name: mapped.name }
       }

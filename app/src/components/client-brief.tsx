@@ -191,7 +191,7 @@ export function ClientBrief({
         </div>
 
         {files.length === 0 ? (
-          <p className="faint small">Drop emails, PDFs, screenshots, or example sheets here (up to 25 MB each).</p>
+          <p className="faint small">Drop sanitized UTF-8 text extracts here (up to 25 MB each). Keep binary originals outside the repository.</p>
         ) : (
           <div className="list">
             {files.map((f) => (

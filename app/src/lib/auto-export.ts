@@ -1,4 +1,5 @@
 import { logActivity } from './logs'
+import { startJob, finishJob, jobCanRetry } from './jobs'
 import { isConfigured } from './n8n'
 import { commitProject } from './projects'
 import { getMeta, getSettings, setMeta } from './settings'
@@ -19,6 +20,7 @@ export async function runAutoExport(trigger: 'auto' | 'manual'): Promise<AutoExp
   const result: AutoExportResult = { at: new Date().toISOString(), exported: [], committed: [], skipped: [] }
   if (running) throw new Error('An auto-export is already running.')
   if (!isConfigured()) throw new Error('No n8n instance is connected.')
+  const operation = startJob('auto-export')
   running = true
   try {
     const { rows, errors } = await buildWorkflowRows(null, true)
@@ -60,7 +62,13 @@ export async function runAutoExport(trigger: 'auto' | 'manual'): Promise<AutoExp
         message: `Auto-export (${trigger}): ${result.exported.length} workflow(s) updated${result.committed.length ? `, committed in ${result.committed.length} project(s)` : ''}${result.skipped.length ? `, ${result.skipped.length} skipped` : ''}`,
         meta: result,
       })
+    finishJob('auto-export', operation, result.skipped.length ? 'partial' : 'ok', `${result.exported.length} exported, ${result.committed.length} committed, ${result.skipped.length} skipped.${result.skipped[0] ? ` First issue: ${result.skipped[0]}` : ''}`)
     return result
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Export failed.'
+    finishJob('auto-export', operation, 'failed', message)
+    logActivity({ level: 'error', action: 'workflows.auto-export', message })
+    throw e
   } finally {
     running = false
   }
@@ -78,6 +86,7 @@ export function lastAutoExport(): AutoExportResult | null {
 export function autoExportDue(now = Date.now()): boolean {
   const { autoExportHours } = getSettings()
   if (!autoExportHours) return false
+  if (!jobCanRetry('auto-export', now)) return false
   const last = Date.parse(lastAutoExport()?.at ?? '') || 0
   return now - last >= autoExportHours * 3_600_000
 }
