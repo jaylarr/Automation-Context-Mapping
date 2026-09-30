@@ -188,7 +188,7 @@ export function invalidateWorkflowList(instanceId?: string): void {
   else workflowCache.clear()
 }
 
-export type SyncResult = { instance: string; fetched: number; inserted: number; updated: number; errorsDetailed: number; captured: number }
+export type SyncResult = { instance: string; fetched: number; inserted: number; updated: number; errorsDetailed: number; captured: number; historyPending: boolean }
 
 const running = new Map<string, Promise<SyncResult>>()
 
@@ -235,12 +235,22 @@ async function syncOne(inst: Instance, trigger: 'manual' | 'auto', knownSlugs: S
     const continuing = Boolean(cursor)
     const boundary = getMeta(`syncBoundary:${inst.id}`)
     let reachedBoundary = false
+    // A saved cursor walks older history. Always check the newest page as well so
+    // a long backfill cannot starve new executions. Keep the original cycle head:
+    // after backfill finishes, the next cycle fills any intervening pages too.
+    if (continuing) {
+      const latest = await api<Paged<N8nExecution>>(inst, '/executions?limit=100&includeData=false')
+      execs.push(...latest.data)
+    }
+    const seen = new Set(execs.map((e) => String(e.id)))
     for (let page = 0; page < settings.syncLookbackPages; page++) {
       const r: Paged<N8nExecution> = await api<Paged<N8nExecution>>(
         inst,
         `/executions?limit=100&includeData=false${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
       )
-      execs.push(...r.data)
+      for (const e of r.data) {
+        if (!seen.has(String(e.id))) { execs.push(e); seen.add(String(e.id)) }
+      }
       cursor = r.nextCursor ?? undefined
       reachedBoundary = Boolean(boundary && r.data.some((e) => String(e.id) === boundary))
       if (!cursor || reachedBoundary) { cursor = undefined; break }
@@ -384,7 +394,7 @@ async function syncOne(inst: Instance, trigger: 'manual' | 'auto', knownSlugs: S
       }
     }
 
-    const result = { instance: inst.id, fetched: execs.length, inserted, updated, errorsDetailed, captured }
+    const result = { instance: inst.id, fetched: execs.length, inserted, updated, errorsDetailed, captured, historyPending: Boolean(cursor) }
     if (getInstance(inst.id)?.uid !== inst.uid) throw new Error('Instance removed during sync.')
     setMeta(`syncCursor:${inst.id}`, cursor ?? '')
     if (!continuing && execs.length) setMeta(`syncHead:${inst.id}`, String(execs[0].id))
@@ -396,7 +406,7 @@ async function syncOne(inst: Instance, trigger: 'manual' | 'auto', knownSlugs: S
       logActivity({
         level: 'success',
         action: 'n8n.sync',
-        message: `${inst.name}: synced ${execs.length} executions (${inserted} new) in ${Date.now() - started} ms`,
+        message: `${inst.name}: synced ${execs.length} executions (${inserted} new) in ${Date.now() - started} ms${cursor ? '; newest page checked, older history still syncing' : ''}`,
         meta: { ...result, trigger },
       })
     }

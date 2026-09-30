@@ -183,6 +183,55 @@ test('sync resumes bounded pages, reconciles unfinished runs and removal clears 
   } finally { globalThis.fetch=originalFetch }
 })
 
+test('new executions appear during backfill without losing its cursor or original checkpoint', async () => {
+  const { syncExecutions } = await import('./n8n.ts')
+  const { saveSettings, getMeta } = await import('./settings.ts')
+  const { removeInstance } = await import('./instances.ts')
+  db.prepare("INSERT INTO instances(id,uid,name,base_url) VALUES('fresh-test','fresh-install','Fresh fixture','http://fresh.invalid')").run()
+  process.env.N8N_API_KEY__FRESH_TEST = 'fixture-key'
+  saveSettings({syncLookbackPages:1})
+  const originalFetch = globalThis.fetch
+  const e = (id) => ({id,workflowId:'w',status:'success',startedAt:new Date().toISOString()})
+  const requests = []
+  globalThis.fetch = async (url) => {
+    if (url.includes('/workflows')) return Response.json({data:[{id:'w',name:'Fixture'}]})
+    const cursor = new URL(url).searchParams.get('cursor')
+    requests.push(cursor)
+    if (cursor === 'old') return Response.json({data:[e('10'),e('5')],nextCursor:'tail'})
+    if (cursor === 'tail') return Response.json({data:[e('1')]})
+    return Response.json({data:[e('12'),e('10')],nextCursor:'middle'})
+  }
+  try {
+    // Seed the same saved history cursor used by already-connected installations.
+    const { setMeta } = await import('./settings.ts')
+    setMeta('syncCursor:fresh-test','old')
+    setMeta('syncHead:fresh-test','10')
+    const [first] = await syncExecutions('manual',[],'fresh-test')
+    assert.deepEqual(requests,[null,'old'])
+    assert.equal(first.fetched,3) // overlapping execution 10 is counted once
+    assert.equal(first.historyPending,true)
+    assert.ok(db.prepare("SELECT id FROM executions WHERE instance_id='fresh-test' AND id='12'").get())
+    assert.equal(getMeta('syncCursor:fresh-test'),'tail')
+    assert.equal(getMeta('syncHead:fresh-test'),'10')
+    const [second] = await syncExecutions('manual',[],'fresh-test')
+    assert.equal(second.historyPending,false)
+    assert.equal(getMeta('syncBoundary:fresh-test'),'10')
+    assert.equal(getMeta('syncCursor:fresh-test'),'')
+    // Once history finishes, a fresh cycle still catches intervening runs.
+    globalThis.fetch = async (url) => {
+      if (url.includes('/workflows')) return Response.json({data:[{id:'w',name:'Fixture'}]})
+      return Response.json({data:[e('12'),e('11'),e('10')],nextCursor:'old'})
+    }
+    await syncExecutions('manual',[],'fresh-test')
+    assert.ok(db.prepare("SELECT id FROM executions WHERE instance_id='fresh-test' AND id='11'").get())
+    assert.equal(getMeta('syncBoundary:fresh-test'),'12')
+    assert.equal(getMeta('syncCursor:fresh-test'),'')
+  } finally {
+    globalThis.fetch = originalFetch
+    removeInstance('fresh-test')
+  }
+})
+
 test('retention removes old facts, preserves streak carry, and prunes undated detailed rows', () => {
   db.prepare("INSERT INTO workflow_prefs(instance_id,workflow_id) VALUES('retention','w')").run()
   const fact=db.prepare('INSERT INTO execution_facts(instance_id,id,workflow_id,status,started_at) VALUES(?,?,?,?,?)')

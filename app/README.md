@@ -82,6 +82,13 @@ npm run dev      # http://127.0.0.1:3100 with hot reload. Stop the background ap
 
 ## Configuration
 
+Execution sync always checks the newest page. While a saved cursor continues older history,
+each sync makes one additional request for the newest 100 executions, then reads the configured
+number of history pages. Overlapping runs are deduplicated. The original backfill checkpoint is
+preserved so subsequent cycles can fill intervening pages; high-volume instances may still have
+incomplete history until catch-up finishes. Sync results and Settings show pending history
+separately from a successful request. Existing workflow logging preferences still apply.
+
 **Do it in the app: Settings page.** You don't need to edit any file:
 
 - **n8n instances:** **Add instance** with a name, URL and API key, then **Add & test**. It's live immediately

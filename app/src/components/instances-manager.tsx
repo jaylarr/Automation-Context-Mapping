@@ -187,6 +187,7 @@ export function InstancesManager({ instances }: { instances: InstanceView[] }) {
                   <span className="list-meta">
                     {inst.hasKey ? (inst.lastSyncAt ? `Last sync ${relativeTime(inst.lastSyncAt)}` : 'Not synced yet') : 'Add its API key to start syncing'}
                     {failing && <span style={{ color: 'var(--err)' }}> · {inst.lastSyncStatus?.replace(/^error: /, '')}</span>}
+                    {!failing && inst.lastSyncStatus && inst.lastSyncStatus !== 'ok' && <span> · {inst.lastSyncStatus}</span>}
                   </span>
                   {message?.id === inst.id && <Result state={message.r} />}
                 </div>

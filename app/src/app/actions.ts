@@ -316,9 +316,10 @@ export async function syncNowAction(instanceId?: string): Promise<ActionState> {
     const inserted = results.reduce((n, r) => n + r.inserted, 0)
     const expected = instanceId ? 1 : connectedInstances().length
     const failed = expected - results.length
+    const backfilling = results.filter((r) => r.historyPending).length
     return {
       ok: failed === 0,
-      message: `Synced ${fetched} executions, ${inserted} new${failed ? `. ${failed} instance(s) failed (see its status below)` : '.'}`,
+      message: `Synced ${fetched} executions, ${inserted} new. Newest page checked for ${results.length} instance(s).${backfilling ? ` Older history still syncing for ${backfilling} instance(s).` : ''}${failed ? ` ${failed} instance(s) failed; check Settings for details.` : ''}`,
     }
   } catch (e) {
     revalidatePath('/', 'layout')
