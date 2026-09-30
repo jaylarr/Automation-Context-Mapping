@@ -10,11 +10,15 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile($source,[ref]$t
 if ($parseErrors.Count) { throw 'Service script did not parse.' }
 $function = $ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Update-Server'},$true)
 Invoke-Expression $function.Extent.Text
+$statusFunction = $ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-MaintenanceStatus'},$true)
+Invoke-Expression $statusFunction.Extent.Text
+$statusFile = Join-Path $fixtureRoot 'maintenance status.json'
+$statusStart = [DateTime]::UtcNow.ToString('o')
+$Action = 'update'
 $script:pointer = 'previous-fixture'
 $script:starts = @()
 $script:verified = @()
 function Say([string]$message) {}
-function Write-MaintenanceStatus([string]$state,[string]$message) {}
 function Stop-Server {}
 function Start-Server { $script:starts += $script:pointer }
 function Wait-Up([string]$release = '') { $script:verified += $release; return $release -eq 'previous-fixture' }
@@ -33,6 +37,10 @@ try {
   if (($script:starts -join ',') -ne 'candidate-fixture,previous-fixture') { throw 'Expected candidate then previous starts.' }
   if (($script:verified -join ',') -ne 'candidate-fixture,previous-fixture') { throw 'Expected release-specific candidate then previous health checks.' }
   if (Test-Path -LiteralPath (Join-Path $dataDir 'maintenance.lock')) { throw 'Maintenance lock leaked.' }
+  Write-MaintenanceStatus 'failed' $failure
+  $status = Get-Content -LiteralPath $statusFile -Raw | ConvertFrom-Json
+  if ($status.state -ne 'failed' -or -not $status.finishedAt -or $status.startedAt -ne $statusStart) { throw 'Maintenance status replacement lost its outcome or timestamps.' }
+  if (@(Get-ChildItem -LiteralPath $fixtureRoot -Filter '*.bak').Count -or @(Get-ChildItem -LiteralPath $fixtureRoot -Filter '*.tmp').Count) { throw 'Maintenance status temporary files leaked.' }
   Write-Output 'Windows failed-candidate rollback control-flow fixture passed.'
 } finally {
   $resolved = [IO.Path]::GetFullPath($fixtureRoot)

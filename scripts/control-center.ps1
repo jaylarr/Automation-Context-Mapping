@@ -20,8 +20,15 @@ function Write-MaintenanceStatus([string]$state, [string]$message) {
   $record = @{ action = $Action; state = $state; startedAt = $statusStart; message = $message }
   if ($state -ne 'running') { $record.finishedAt = [DateTime]::UtcNow.ToString('o') }
   $temp = "$statusFile.$PID.tmp"
-  [IO.File]::WriteAllText($temp, ($record | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
-  if (Test-Path -LiteralPath $statusFile) { [IO.File]::Replace($temp, $statusFile, $null) } else { [IO.File]::Move($temp, $statusFile) }
+  $backup = "$statusFile.$PID.bak"
+  try {
+    [IO.File]::WriteAllText($temp, ($record | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+    # Windows PowerShell converts a null string argument to an empty path.
+    # Give File.Replace a real backup path, then remove only this write's temporary files.
+    if (Test-Path -LiteralPath $statusFile) { [IO.File]::Replace($temp, $statusFile, $backup) } else { [IO.File]::Move($temp, $statusFile) }
+  } finally {
+    Remove-Item -LiteralPath $temp, $backup -Force -ErrorAction SilentlyContinue
+  }
 }
 function Test-Up([string]$release = '') {
   try {
