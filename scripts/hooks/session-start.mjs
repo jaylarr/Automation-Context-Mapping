@@ -42,7 +42,7 @@ try {
 const context = `# Automation workspace (session start)
 
 The rules are in AGENTS.md (§0 checklist). If it isn't in your context, read it now. Three reminders:
-- Load the matching skill (Skills/INDEX.md, router \`using-n8n-skills-official\`) before any n8n action.
+- Load the matching skill (Skills/INDEX.md, router \`n8n-workspace-access\`) before any n8n action. API access does not require MCP; MCP hooks do not guard shell HTTP calls.
 - Ask the owner before anything outward: publishing, production runs, client systems, commits, pushes.
 - A kept workflow change is exported with \`node scripts/export-workflow.mjs\` (skill \`n8n-workflow-export\`).
 

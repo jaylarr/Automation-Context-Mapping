@@ -1,6 +1,6 @@
 ---
 name: project-handover-docs
-description: Generate or refresh the client-facing handover and operating guide (handover-sop.md) plus the architecture doc for an automation project, from its workflow JSON files, specs, and AGENTS.md. Use when the user says "handover", "hand over to the client", "write the SOP", "operating guide", "client documentation", "document this project", "go-live docs", or when a project moves to status live.
+description: "Generate or refresh the client-facing handover and operating guide (handover-sop.md) plus the architecture doc for an automation project, from its workflow JSON files, specs, and AGENTS.md. Use when the user says \"handover\", \"hand over to the client\", \"write the SOP\", \"operating guide\", \"client documentation\", \"document this project\", \"go-live docs\", or when a project moves to status live."
 ---
 
 # Project Handover Docs
@@ -18,6 +18,11 @@ Produces `documentation/handover-sop.md` (for the **client**) and refreshes
    fine. IDs, tokens, internal notes, and pricing are not.
 3. **Plain language in the SOP.** The reader is a non-technical client. Say "the automation",
    "the website form", "your CRM", not "webhook node", "Execute Workflow", "JSON".
+4. **State the evidence boundary.** A saved export describes intended behavior, not current live
+   publication or runtime success. Distinguish inspected exports, live API/MCP read-back, mock/pinned
+   tests and approved live execution. Missing evidence stays a TODO; writing handover docs does not
+   authorize publishing, setting status live or contacting the client. Audits/rollout notes remain
+   in the external private history, not the client SOP.
 
 ## Procedure
 

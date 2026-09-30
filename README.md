@@ -10,7 +10,7 @@ dashboard shows what's running, what broke, and what isn't backed up yet.
 | | |
 |---|---|
 | **Rules your agent follows** | `AGENTS.md` + `Documentation/`: spec before build, sized before designing, numbered canvas sections, error handling, export after every change. A light path for small jobs |
-| **Curated n8n skills** | The official n8n-io skill pack for the **official instance-level n8n MCP**, plus workspace skills for sizing, canvas sections, export, audit and handover (`Skills/INDEX.md`) |
+| **Curated n8n skills** | Workspace routing for API, optional official MCP, or local JSON; custom sizing, canvas sections, export, audit and handover skills, plus the official n8n-io pack (`Skills/INDEX.md`) |
 | **Guardrails (Claude Code)** | Hooks that force your confirmation before publishing, archiving or production runs, and send the agent back when it changed a workflow but didn't export it |
 | **One folder per client project** | Brief, specs, architecture, decisions, CHANGELOG, test evidence and the workflow JSON, each in its **own private git repo**. Client work never enters this public repo |
 | **Safe exports** | One sanitizer (`sanitize-core.mjs`, tested) strips test data and instance state and refuses workflows with a secret typed into a node. Used by the app, the agents and commits |
@@ -55,8 +55,8 @@ n8n-agent-workspace/
 - **Windows, macOS or Linux.** The scripts are Node (`scripts/*.mjs`); the `.ps1` files are Windows
   shortcuts to the same scripts
 - **Node.js 22.18+** (Claude Code hooks, scripts, Control Center) and **git**
-- A **self-hosted n8n** with the official **instance-level MCP** enabled (Settings → MCP), connected
-  to your agent
+- An **n8n instance with public API access** for the Control Center. Official instance-level MCP
+  is optional for agent work; agents can also use the API or local workflow JSON
 - An AI coding agent: **Claude Code** (rules + skills + hooks), or Codex / Cursor (rules + skills)
 
 ## Quick start

@@ -1,11 +1,11 @@
 ---
 name: n8n-workflow-export
-description: Export an n8n workflow into this workspace's repo as a sanitized, importable JSON file, and update the project CHANGELOG. Use when the user says "export", "save the workflow to the repo", "pull the workflow", "sync workflow to git", "back up the workflow", "sanitize this JSON", "commit the workflow", after any create_workflow_from_code / update_workflow that should be kept, or when a raw n8n download (*.raw.json) needs cleaning.
+description: "Export an n8n workflow into this workspace's repo as a sanitized, importable JSON file, and update the project CHANGELOG. Use when the user says \"export\", \"save the workflow to the repo\", \"pull the workflow\", \"sync workflow to git\", \"back up the workflow\", \"sanitize this JSON\", \"commit the workflow\", after any create_workflow_from_code / update_workflow that should be kept, or when a raw n8n download (*.raw.json) needs cleaning."
 ---
 
 # n8n Workflow Export
 
-Turns a live workflow (via the n8n MCP) or a raw UI download into
+Turns a live workflow (via the public API or optional official MCP) or a raw UI download into
 `n8n workflows/<project>/workflows/NN-<slug>.json`. The file is importable, has no secrets, and is
 diff-friendly. The full rules are in `Documentation/05-export-and-versioning.md`. This skill is the
 procedure.
@@ -26,21 +26,29 @@ procedure.
 
 1. **Identify the project.** Which project folder (`n8n workflows/<slug>/`)? Read its
    `AGENTS.md` and `README.md` workflows table.
-2. **Get the JSON into a raw file.**
-   - From n8n: `get_workflow_details({ workflowId })`, then write the result as-is to
-     `n8n workflows/<slug>/workflows/<name>.raw.json` (gitignored). The `{ workflow: {…} }` shape is fine.
-   - From a UI download: save it as `workflows/<name>.raw.json`.
+2. **Confirm source and preflight before writing a new raw file.** Load `n8n-workspace-access`.
+   Read the workflow through the selected API/MCP method; for a supplied UI download, inspect its
+   existing content without copying it. Sanitize in memory with `sanitizeWorkflow`, then call
+   `findHardcodedSecret` and `checkImportable` from `app/src/lib/sanitize-core.mjs`. Reject hardcoded
+   secrets before saving. Remove pin data/runtime state and review client data in parameters/notes.
+   Save only that checked input as `n8n workflows/<slug>/workflows/<name>.raw.json` (gitignored).
+   The exporter scans again. Never echo raw private JSON, credential values or execution data.
+   Resolve the immutable source installation UID from verified project records/Control Center
+   Settings; a workflow ID or name alone is insufficient. Existing exports need matching bindings;
+   unresolved legacy files use the binding preview/confirmation procedure in the operations guide.
 3. **Run the shared exporter** (same rules as the Control Center's Import, one implementation in
    `app/src/lib/sanitize-core.mjs`, covered by tests):
 
    ```bash
-   node scripts/export-workflow.mjs --project <slug> --raw "n8n workflows/<slug>/workflows/<name>.raw.json" --changelog "<what changed and why>"
+   node scripts/export-workflow.mjs --project <slug> --installation <installation-uid> --raw "n8n workflows/<slug>/workflows/<name>.raw.json" --changelog "<what changed and why>" --dry-run
    ```
 
-   It sanitizes, scans for secrets, checks every connection names an existing node, picks the file
-   (the one already holding this workflow id, else the next free number, archive included), writes
+   Inspect the dry-run result, then repeat without `--dry-run` to save. It sanitizes, scans for
+   secrets, checks every connection names an existing node, and picks the file belonging to this
+   source installation UID plus workflow ID, else the next free number (archive included). It writes
    pretty JSON, adds the CHANGELOG line under [Unreleased], deletes the raw file, and prints a JSON
-   summary (file, action, credentials). Add `--dry-run` to preview. It never commits.
+   summary (file, action, credentials) and records `documentation/workflow-bindings.json`.
+   It refuses overwriting files without matching source bindings. It never commits or pushes.
    - **Exit code 2** = a secret is typed into a node, or a connection points at a missing node.
      Nothing was written. Go back to Non-negotiable 1 (or fix the wiring), then run it again.
    - `"action": "unchanged"` = the saved file already matches; nothing to do.
@@ -74,7 +82,8 @@ procedure.
    (`n8n-workflow-sections`), an error workflow in `settings.errorWorkflow` if it's published,
    and credential names that follow `Documentation/03-naming-conventions.md`? Flag each miss.
 7. **Report** the file written, the fields stripped, any credential references (by name) the
-    importer will need to re-bind, the standards-check results, and a suggested commit message:
+    importer will need to verify or re-bind, the source installation/binding, standards-check results,
+    evidence level (local/API read-back/MCP read-back), and a suggested commit message:
     `<project-slug>: <what changed>`. Projects are versioned in their **own private repo**
     (`n8n workflows/<slug>/.git`, see `Documentation/05-export-and-versioning.md`). **Don't commit**
     unless the owner asks.

@@ -17,12 +17,12 @@ others support. The routing table lives in [Skills/INDEX.md](../Skills/INDEX.md)
 | **Custom** | Written by us | `SKILL.md`, refs, *no* `SOURCE.md` | ✅ Yes, we own it |
 
 **Why these packs.** The official pack is written for the **official n8n instance-level MCP**,
-which is the MCP this workspace uses. The community pack targets the *community* `n8n-mcp`
+available optionally for agent work. The Control Center itself uses the REST API. The community pack targets the *community* `n8n-mcp`
 server, so we only take the skills the official pack doesn't cover (self-hosting, Code Tool,
 Python, workflow patterns). Each of those has a `SOURCE.md` that maps its names to our setup.
 
 **Precedence when skills disagree:**
-1. The **live MCP tools** (`get_node_types`, the SDK reference) beat every skill on parameter shapes.
+1. The chosen access mode and installed-version capabilities govern operations. MCP node types/SDK govern MCP parameters; API mode uses version-specific official docs/source.
 2. **Custom** skills and `Documentation/` win on *workspace conventions* (naming, folders, export, docs).
 3. **Official** skills win on *n8n behavior and best practice*.
 4. **Community** skills fill gaps only.
@@ -33,7 +33,7 @@ Python, workflow patterns). Each of those has a `SOURCE.md` that maps its names 
   Run `scripts/link-skills.mjs` after cloning.
 - Claude Code reads `.claude/skills/`. The same script creates that junction too. You may also have
   the czlonkowski pack installed globally in `~/.claude/skills`. **Inside this workspace, prefer
-  the `*-official` skills** (they match the MCP we use).
+  the custom access router and task-matched `*-official` skills**; their MCP calls apply only in MCP mode.
 - Any agent: [Skills/INDEX.md](../Skills/INDEX.md) says which skill to open for which task.
 
 ## When to write a new custom skill
@@ -98,3 +98,16 @@ Check quarterly, and after any n8n upgrade:
 
 **Drift signals** (time to update): a skill names an MCP tool that doesn't exist, parameter shapes
 differ from `get_node_types`, or n8n's behavior contradicts a skill.
+
+## Access and validation
+
+Start with `n8n-workspace-access`. It supports public API, optional official MCP and local JSON.
+Load `using-n8n-skills-official` only for official MCP access. Vendor behavior guidance remains
+useful in other modes, but tool names are not API endpoints. Read skill files directly if the
+agent has no Skill tool. Keep upstream files unchanged; put workspace adaptations in custom skills.
+
+Run `node scripts/check-skills.mjs` after custom skill changes. It checks frontmatter and local
+Markdown links and runs documented export commands against disposable projects, including UID
+binding and secret rejection. It does not validate live n8n execution or agent behavior. Use
+realistic desk exercises for access selection and report their limits in the private update history.
+Audit/update notes belong outside Git, as configured in AGENTS.local.md.

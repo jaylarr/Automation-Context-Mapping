@@ -1,6 +1,6 @@
 ---
 name: n8n-project-sizing
-description: Before building a new automation project, estimate how many n8n nodes the whole project needs, then ASK the owner whether to build it as one single workflow or split it into multiple workflows. Nothing gets built until they answer. Use when a new project or client brief arrives, when asked to "build", "develop", "create the automation for" something that has no workflows yet, after discovery/spec and before architecture, when a new feature will add many nodes to an existing project, or when the user asks "how big is this", "how many nodes", "one workflow or several", "should I split this".
+description: "Before building a new automation project, estimate how many n8n nodes the whole project needs, then ASK the owner whether to build it as one single workflow or split it into multiple workflows. Nothing gets built until they answer. Use when a new project or client brief arrives, when asked to \"build\", \"develop\", \"create the automation for\" something that has no workflows yet, after discovery/spec and before architecture, when a new feature will add many nodes to an existing project, or when the user asks \"how big is this\", \"how many nodes\", \"one workflow or several\", \"should I split this\"."
 ---
 
 # n8n Project Sizing (estimate nodes → ask: one workflow or several?)

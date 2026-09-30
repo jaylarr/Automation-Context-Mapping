@@ -2,6 +2,31 @@
 
 Copy-ready sticky contents and SDK code for the `n8n-workflow-sections` skill.
 
+## API or local JSON
+
+Sticky nodes use the same saved workflow JSON as the canvas. For example:
+
+```json
+{
+  "id": "section-01",
+  "name": "01 Receive and check",
+  "type": "n8n-nodes-base.stickyNote",
+  "typeVersion": 1,
+  "position": [0, 0],
+  "parameters": {
+    "content": "## 01 — RECEIVE + CHECK\n\n**What happens here:**\nThe request is checked before processing.",
+    "width": 720,
+    "height": 500,
+    "color": 5
+  }
+}
+```
+
+Place working nodes inside the section rectangle; retain their existing IDs and connections.
+Use the installed version's accepted workflow write schema rather than posting the entire GET
+response. Read back positions, dimensions, content and connections after an authorized save.
+SDK examples below apply only when the optional MCP/SDK path is available.
+
 ## Main section
 
 ```markdown

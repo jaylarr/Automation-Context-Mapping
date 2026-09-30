@@ -1,6 +1,6 @@
 ---
 name: new-automation-project
-description: Scaffold a new client automation project in this workspace with the standard folder layout, AGENTS.md, README, and documentation set, and register it in the project registry. Use when the user says "new project", "start a project for <client>", "set up a new automation", "create the project folder", "kick off <client>", or before building the first workflow for a client that has no folder under "n8n workflows/" yet.
+description: "Scaffold a new client automation project in this workspace with the standard folder layout, AGENTS.md, README, and documentation set, and register it in the project registry. Use when the user says \"new project\", \"start a project for <client>\", \"set up a new automation\", \"create the project folder\", \"kick off <client>\", or before building the first workflow for a client that has no folder under \"n8n workflows/\" yet."
 ---
 
 # New Automation Project
@@ -44,7 +44,8 @@ and `Documentation/03-naming-conventions.md`.
 6. **Discovery:** if a client call is next, point the owner to
    `Documentation/templates/discovery-questions.md`, and offer to turn the answers into
    `documentation/discovery.md`, then the specs in `documentation/spec/`.
-7. **n8n side:** suggest creating the n8n folder named `<slug>` in the dev instance, and the
+7. **n8n side:** load `n8n-workspace-access`; suggest an n8n folder named `<slug>` only if that
+   instance/access mode supports folders (otherwise use the prefix/tags). Also plan the
    project's `00-error-handler` workflow (Error Trigger → alert) **before** other workflows,
    because every production workflow points at it.
 8. **Size before building:** once the brief/spec is clear, run the `n8n-project-sizing` skill.

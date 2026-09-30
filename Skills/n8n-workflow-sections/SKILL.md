@@ -1,6 +1,6 @@
 ---
 name: n8n-workflow-sections
-description: Lay out every n8n workflow as numbered, plain-language sections using sticky notes (01 — RECEIVE + FIND, 02 — CHECK + PREPARE …), plus EXCEPTIONS / SETUP / DEMO BOUNDARY notes, so anyone (the owner, a client) can read the canvas in order. Two layouts: Row (sections left → right) or Column (sections stacked top → bottom). Load at the very START of creating any new n8n workflow, before writing SDK code, and whenever adding nodes to an existing workflow. Triggers on "new workflow", "build a workflow", "create_workflow_from_code", "update_workflow" that adds/moves nodes, "sticky note", "section", "organize the canvas", "lay out", "make it readable", "visually organized", or tidying an existing workflow.
+description: "Lay out every n8n workflow as numbered, plain-language sections using sticky notes (01 — RECEIVE + FIND, 02 — CHECK + PREPARE …), plus EXCEPTIONS / SETUP / DEMO BOUNDARY notes, so anyone (the owner, a client) can read the canvas in order. Two layouts: Row (sections left → right) or Column (sections stacked top → bottom). Load at the very START of creating any new n8n workflow, before writing SDK code, and whenever adding nodes to an existing workflow. Triggers on \"new workflow\", \"build a workflow\", \"create_workflow_from_code\", \"update_workflow\" that adds/moves nodes, \"sticky note\", \"section\", \"organize the canvas\", \"lay out\", \"make it readable\", \"visually organized\", or tidying an existing workflow."
 ---
 
 # n8n Workflow Sections (sticky-note layout)
@@ -25,6 +25,12 @@ Only use node groups when the owner asks for them.
 - Tidying or reviewing an existing workflow that has no sections.
 
 Tiny workflows (≤ 4 nodes) still get **one** section note (`01 — <WHAT IT DOES>`).
+Load `n8n-workspace-access` first. Sections apply to API/local JSON too: create/edit ordinary
+`n8n-nodes-base.stickyNote` nodes with stable IDs, position, content, width and height. Preserve
+unrelated node IDs/parameters, wiring and settings. The SDK examples apply only in MCP mode.
+For API saves, use the installed version's accepted payload, then GET and compare exact node
+positions, sticky dimensions, connections and supported settings. For local edits, inspect the
+saved JSON and label live layout as unverified. Do not invent REST `setNodePosition` operations.
 
 ## Non-negotiables
 
@@ -37,7 +43,7 @@ Tiny workflows (≤ 4 nodes) still get **one** section note (`01 — <WHAT IT DO
    UPPERCASE, 1–3 short words per side, joined with `+` (`01 — INTAKE + CHECK`,
    `03 — COMPANY WIKI`, `05 — SAVE + RESPOND`). *Why:* the numbers give the reading order at a
    glance, even zoomed out.
-3. **3 to 6 main sections.** Fewer means a section is doing too much. More means the workflow
+3. **Normally 3 to 6 main sections; tiny workflows use one.** More means the workflow
    should probably be split. Raise it with the owner (`n8n-project-sizing`) rather than splitting silently.
 4. **Body = 2–3 labelled blocks in plain business language.** No node types, no expressions, no
    jargon ("The workflow finds the matching project", not "Supabase getAll with eq filter").
@@ -127,19 +133,24 @@ short sentences. Use a trailing double space + `\n` for line breaks.
 
 ## Procedure
 
-1. **Plan the sections before any SDK code.** Write the story as 3–6 steps, then list the nodes per
+1. **Plan the sections before JSON or SDK construction.** Write the story as normally 3–6 steps
+   (one for a tiny workflow), then list the nodes per
    section, which nodes are exceptions, whether setup/demo notes are needed, and the **layout**
    (Row or Column, see [Layouts](#layouts-row-or-column)). Show this
    outline to the owner together with the build plan, as part of the plan approval
    (`Documentation/02-how-i-work.md`).
 2. **Name nodes to match** (`Documentation/03-naming-conventions.md`). Section titles and node names
    should tell the same story.
-3. **Build the stickies in the SDK code** with `sticky(content, [nodes…], { color })`. The node
+3. **Build the stickies** as ordinary JSON nodes in API/local mode (see the JSON example in
+   [references/TEMPLATES.md](references/TEMPLATES.md)). In MCP SDK mode use
+   `sticky(content, [nodes…], { color })`. The SDK node
    array **sizes and anchors** the note around those nodes. It does **not** add them, so every node
    and every sticky must still be passed to `workflow(...).add(...)`. For the templates and a full
    example, see [references/TEMPLATES.md](references/TEMPLATES.md).
-4. **Validate** (`validate_workflow`) as usual. Stickies don't affect execution.
-5. **Create/update**, then **verify the layout** with `get_workflow_details`. For every
+4. **Validate** using available MCP validation, or local structural/node checks in API/local mode;
+   disclose unavailable runtime/schema checks. Stickies don't affect execution.
+5. **Create/update** only within authorization, then **verify the layout** with API read-back or
+   MCP `get_workflow_details` (saved JSON only when offline). For every
    `n8n-nodes-base.stickyNote` take `position` [x, y] + `parameters.width/height`, then check:
    - every non-sticky node's `position` falls inside exactly one section rectangle
      (x between `sx` and `sx + width − 100`, y between `sy + 180` and `sy + height − 100`, so it
@@ -149,7 +160,7 @@ short sentences. Use a trailing double space + `\n` for line breaks.
    - **Column:** main sections share one `x` and `width`, don't overlap, and increase in `y` in
      numeric order (gap ~48 px), and nodes inside each section run left → right;
    - the EXCEPTIONS / SETUP / DEMO notes don't overlap the main sections.
-6. **Fix any misfit** with `update_workflow`: `setNodePosition` for nodes and stickies, and
+6. **Fix any misfit** in the JSON/payload and re-read it. In MCP mode use `update_workflow`: `setNodePosition` for nodes and stickies, and
    `setNodeParameter` (`/width`, `/height`) for sticky size. Then call `get_workflow_details` again
    to confirm, because auto-layout can move things. Geometry cheat-sheet (matches the reference workflows):
    - sticky header block ≈ 200–260 px tall, so place node rows at `sy + 240` … `sy + height − 120`;

@@ -3,7 +3,7 @@
 // Center's Import (app/src/lib/sanitize-core.mjs). Agents use this instead of sanitizing by hand:
 // write the get_workflow_details result (or a UI download) to a *.raw.json file, then run:
 //
-//   node scripts/export-workflow.mjs --project <slug> --raw <file.raw.json> [--changelog "what changed"]
+//   node scripts/export-workflow.mjs --project <slug> --installation <installation-uid> --raw <file.raw.json> [--changelog "what changed"]
 //                                    [--file NN-name.json] [--keep-raw] [--dry-run]
 //
 // It refuses (exit 2) when a secret is typed into a node, or when connections point at missing
@@ -120,7 +120,7 @@ export function exportWorkflow({ project, raw, file, installation, changelog, ke
 
 if (isMain(import.meta.url)) {
   const a = parseArgs()
-  if (!a.project || !a.raw) fail('Usage: node scripts/export-workflow.mjs --project <slug> --raw <file.raw.json> [--changelog "…"] [--file NN-name.json] [--dry-run]')
+  if (!a.project || !a.raw || !a.installation) fail('Usage: node scripts/export-workflow.mjs --project <slug> --installation <installation-uid> --raw <file.raw.json> [--changelog "…"] [--file NN-name.json] [--dry-run]')
   try {
     const r = exportWorkflow({
       project: String(a.project),

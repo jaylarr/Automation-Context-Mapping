@@ -1,7 +1,8 @@
 # Audit report template
 
-Save as `n8n workflows/<slug>/documentation/audits/YYYY-MM-DD-audit.md`. Use plain language in the
-summary (the owner may share it with the client). Put the technical evidence in the suggestions.
+Save as `YYYY-MM-DD-<project-slug>-audit.md` in the external private history configured in
+`AGENTS.local.md`, and update its index. Never commit the report or link it from public docs.
+Use plain language in the summary. Put the technical evidence in the suggestions.
 No secrets and no real client data in the report.
 
 ```markdown
@@ -11,6 +12,8 @@ No secrets and no real client data in the report.
 **Instance:** dev | prod (<url>) · read-only
 **Sources read:** AGENTS.md, README.md, spec/01-…, architecture.md, decisions.md, CHANGELOG.md,
 workflows/*.json, <N> live workflows, executions since YYYY-MM-DD
+**Access/evidence:** API | official MCP | local JSON; installed version/capabilities checked;
+live read-back time; local/mock/live tests inspected; unavailable checks and history coverage gaps
 
 ## Summary
 

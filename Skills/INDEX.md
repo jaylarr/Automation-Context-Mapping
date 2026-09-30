@@ -17,7 +17,8 @@ here, the one in this folder wins. The czlonkowski pack's `using-n8n-mcp-skills`
 
 | Skill | Load when |
 |---|---|
-| [`using-n8n-skills-official`](using-n8n-skills-official/SKILL.md) | **Any n8n task.** Router + MCP tool reference + non-negotiables |
+| [`n8n-workspace-access`](n8n-workspace-access/SKILL.md) | **Any n8n task.** Select API, optional official MCP, or local JSON; then load task skills |
+| [`using-n8n-skills-official`](using-n8n-skills-official/SKILL.md) | **Official MCP mode.** MCP tool reference and protocol; not an app dependency |
 | [`n8n-project-sizing`](n8n-project-sizing/SKILL.md) | **New project / new build, before any design.** Estimate nodes → ask the owner: one workflow or several |
 | [`n8n-workflow-sections`](n8n-workflow-sections/SKILL.md) | **Start of every new workflow** (before SDK code), and any edit that adds nodes. Sticky-note sections: `01 — VERB + VERB` … |
 
@@ -25,6 +26,7 @@ here, the one in this folder wins. The czlonkowski pack's `using-n8n-mcp-skills`
 
 | Skill | Load when |
 |---|---|
+| [`n8n-workspace-access`](n8n-workspace-access/SKILL.md) | Confirm transport, capabilities, target installation and evidence limits before n8n work |
 | [`n8n-project-sizing`](n8n-project-sizing/SKILL.md) | New project or big feature: estimate the node count, then ask single vs multiple workflows (mandatory before building) |
 | [`n8n-workflow-sections`](n8n-workflow-sections/SKILL.md) | Laying out / organizing any workflow canvas with numbered sticky-note sections (mandatory for new workflows) |
 | [`new-automation-project`](new-automation-project/SKILL.md) | Starting a project for a client; creating the project folder |
@@ -63,11 +65,18 @@ Written for the *community* n8n-mcp. Read each skill's `SOURCE.md` for tool-name
 
 ## Precedence
 
-1. Live MCP tools (`get_node_types`, SDK reference) beat every skill on parameter shapes.
+1. The owner's chosen access mode and actual installed-version capabilities govern available operations.
+   In MCP mode live node types/SDK govern parameters; in API mode use official version-specific docs/source.
 2. Workspace skills + `Documentation/` win on workspace conventions (e.g. `n8n-workflow-sections`
    overrides the official "stickies annotate, don't group" rule).
 3. `*-official` skills win on n8n behavior.
 4. Community skills fill gaps only.
+
+The official pack's MCP/SDK instructions apply in MCP mode. In API/local mode use its behavioral
+guidance with `n8n-workspace-access`; do not invent matching REST endpoints. Keep vendored files intact.
+
+Run `node scripts/check-skills.mjs` to validate custom skill metadata/links and exercise the
+documented export command against disposable fixtures. This is local evidence, not live n8n validation.
 
 ## Adding a skill
 

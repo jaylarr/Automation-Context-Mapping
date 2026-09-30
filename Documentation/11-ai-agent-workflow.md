@@ -1,97 +1,73 @@
-# 11 — AI Agent Workflow (building via the n8n MCP)
+# 11 — AI agent workflow
 
-How an AI agent (Codex, Cursor, Claude Code…) builds and edits n8n workflows in this workspace
-through the **official n8n instance-level MCP**. The entry-point skill is
-**`using-n8n-skills-official`**. Load it first on any n8n task.
+The Control Center uses the n8n public REST API. Agents can work through the API, optional
+**official instance-level MCP**, or local workflow JSON. Start with
+[the workspace access skill](../Skills/n8n-workspace-access/SKILL.md); select access before loading
+transport-specific instructions. MCP is not required to run the app or use the custom skills.
 
-## Before touching the MCP
+## Before building
 
-1. **Read the project `AGENTS.md`.** It tells you which client, which instance, which credentials,
-   and any exceptions.
-2. **Confirm the target instance** against the project `AGENTS.md`. With separate instances: build
-   on **dev**, never prod. With a **single instance** (dev = prod): unpublished drafts are "dev",
-   and anything published is "prod". Never edit a published workflow's live behavior without
-   the owner's OK ([07-self-hosted-environments.md](07-self-hosted-environments.md)).
-3. **Is there a spec?** (`documentation/spec/NN-<slug>.md`, the short template is enough). No spec
-   means you write one with the owner first ([02-how-i-work.md](02-how-i-work.md)). A **small job**
-   (under ~10 nodes, one workflow, no writes to a client system) needs only three lines: Trigger,
-   Result, On failure. Three lines beat a chat transcript.
-4. **Sized and decided?** New project or a big feature: run `n8n-project-sizing` (estimate nodes,
-   then ask the owner: one workflow or several). Don't build until the owner answers. Small jobs
-   skip this.
-5. **Search before building:** `search_workflows` for existing workflows and sub-workflows
-   (project slug tag, `subworkflow` tag).
+Read the project `AGENTS.md` and owner-maintained `client-brief/`, confirm the target installation
+and workflow, and agree the spec. New projects and large features need the sizing decision;
+small jobs use Trigger / Result / On failure. Search existing workflows through the chosen
+method before creating duplicates. No live access means repo-only evidence, not a live audit.
 
-## The build loop
+## Build and verify
 
-| Step | MCP tool(s) | Skill to load |
+| Step | API or local JSON | Optional official MCP |
 |---|---|---|
-| 1. Learn the SDK (once per session) | `get_workflow_sdk_reference` (sections: `patterns`, `guidelines`, `design`) | `n8n-workflow-lifecycle-official` |
-| 1b. Best practices per technique | `get_workflow_best_practices` (`technique: "list"` first if unsure; once per technique, e.g. `chatbot`, `scheduling`) | `n8n-workflow-lifecycle-official` |
-| 2. Find nodes | `search_nodes` (note the resource/operation discriminators) | `n8n-node-configuration-official` |
-| 3. Get exact parameter shapes | `get_node_types` (with resource/operation discriminators) | `n8n-node-configuration-official` |
-| 3a. Ground dropdown / resource-locator values | `list_credentials` → `explore_node_resources` (real Sheets tabs, channels, model IDs; never invent IDs) | `n8n-node-configuration-official` |
-| 3b. **Plan canvas sections** (before any code) | — | **`n8n-workflow-sections`** |
-| 4. Write SDK code (incl. `sticky(...)` sections) | — | expressions / code-nodes / loops / agents / error-handling, as needed |
-| 5. Validate | `validate_workflow` (fix → re-validate until clean); `validate_node_config` for a single node | `n8n-workflow-lifecycle-official` |
-| 6. Create or update | `create_workflow_from_code` (with `description`) / `update_workflow` | — |
-| 7. **Verify wiring + layout** | `get_workflow_details` → check `connections`, and that every node sits inside its section note | `n8n-workflow-sections` |
-| 8. User wire-up | The owner binds/verifies credentials per node in the UI | `n8n-credentials-and-security-official` |
-| 9. Test | `prepare_workflow_pin_data` → `test_workflow` (**ask first** if unpinned side effects exist) | `n8n-workflow-lifecycle-official` → `references/TESTING.md` |
-| 10. Debug failures | `search_workflow_executions` → `get_workflow_execution` | `n8n-debugging-official` |
-| 10b. What changed? / undo | `get_workflow_history`, `get_workflow_versions_diff`, `restore_workflow_version` | `n8n-debugging-official` |
-| 11. Export to repo, then commit in the project's private repo | `get_workflow_details` → sanitize → write JSON | **`n8n-workflow-export`** |
-| 12. Publish | `publish_workflow`, **only with the owner's explicit OK** | — |
+| Discover behavior and parameters | Installed-version official node docs/source and verified exports; API schema for payloads | Available SDK reference, node types and resource discovery |
+| Plan | Spec, sizing when required, numbered sticky sections | Same |
+| Prepare | Edit JSON preserving IDs, connections, coordinates and unrelated settings | Use supported SDK/operations; preserve requested layout |
+| Validate | Structural checks, secret scan and version-specific parameter review; disclose gaps | Available `validate_workflow` / `validate_node_config`, plus structural review |
+| Save | Authorized documented API create/update; inspect published-target impact first | Authorized available create/update operations; verify draft/live semantics |
+| Read back | GET the saved workflow and compare wiring, layout, settings and intended fields | `get_workflow_details` and the same comparison |
+| Credentials | Owner verifies exact IDs/types/resources in UI where API discovery is unavailable | Available credential/resource metadata tools, followed by deliberate verification |
+| Test | Local mocks, documented installed-version execution mechanisms or UI tests | Supported pinned-data tools; inspect unpinned side effects |
+| Inspect results | Read-only execution API with pagination and coverage limits | Available execution search/detail tools |
+| Export | Shared exporter with immutable source installation UID | Same exporter; MCP does not replace binding |
+| Publish | Separate explicit authorization for the workflow and documented operation | Separate explicit authorization for the workflow and available publish tool |
 
-> **Tool-name drift.** Names above were checked against the live official MCP on 2026-09-28.
-> They change between n8n versions (older docs said `get_sdk_reference`, `prepare_test_pin_data`,
-> `get_execution`, `get_suggested_nodes`). **Trust the live tool list**, and fix this table when
-> it drifts. Community-pack skills (czlonkowski) use the *community* n8n-mcp names
-> (`n8n_create_workflow`, `get_node` …), which don't exist here.
+MCP tool names are not REST endpoints. Do not fabricate SDK validation, credential discovery,
+pin-data or history capabilities in API mode. Upstream documentation is not proof of the
+installed version. Use [the API procedure](../Skills/n8n-workspace-access/references/API.md).
 
-## Loading skills: the right amount
+A successful save proves persistence, not a working automation. Published-target edits may
+change live behavior; inspect the actual version/method before claiming an update is draft-only.
+When live changes are not authorized, prepare a local file or an explicitly authorized separate
+unpublished candidate. Preserve supported fields and report payload fields a method cannot save.
 
-Load the router (`using-n8n-skills-official`) plus the **2–4 skills that match this step**, and
-re-load one at the moment you need it. Don't preload the whole index: every skill is ~150–400
-lines, and a context full of skills pushes out the spec and the project `AGENTS.md`, which matter
-more.
+## Authorization and evidence
 
-## What agents may do without asking
+Read-only inspection and local preparation are appropriate within the requested scope. Remote
+writes, production tests, messaging/client writes, publish/unpublish, archive and Git actions
+need explicit authorization for their actual effect. Existing explicit approval remains valid;
+ask only when the scope or effect is missing or ambiguous. Follow the project's additional rules.
 
-- Read anything in the repo; search and read workflows, executions, and node types via MCP.
-- Validate code; create or update **draft** workflows in the **dev** instance for the current project.
-- Write and edit files in the current project folder (workflows JSON, docs).
+Do not blindly retry an uncertain create, run or restore. Read back/reconcile the result first.
+Never infer approval from a read-only connection check. No `$env`/`$vars` in workflows; secrets
+belong in n8n credentials, and API keys stay in private configuration.
 
-## What agents must ask before doing
+Label proof as local inspection, structural validation, mock/pinned test, live save verification
+or live execution. Report missing checks and history gaps. Export kept changes with CHANGELOG
+and affected specs/architecture/handover docs, without claiming untested go-live readiness.
 
-- `publish_workflow` / `unpublish_workflow` / `archive_workflow`
-- `execute_workflow` in production mode, or any test run with real side effects (emails, CRM
-  writes, payments, Slack messages)
-- Anything touching the **prod** instance
-- Creating Data Tables or workflows **outside** the current project
-- Git commits and pushes
-- Editing global `Documentation/`, root `AGENTS.md`, or vendored skills
+## Skills and hooks
 
-## Session hygiene
+Load the workspace router plus the task skills needed now. In MCP mode also load the official
+router; keep vendored skills unchanged. Read files directly when the agent has no Skill tool.
+The skill junctions are recreated by `node scripts/link-skills.mjs`.
 
-- **Capture the why.** Put context that only exists in chat into the workflow `description`,
-  `decisions.md`, or the spec before the session ends.
-- **End every build session with:** exported JSON, a CHANGELOG entry, updated docs, and a short
-  summary of what's pending on the owner's side (credentials to create, toggles to flip).
-- **Lessons learned** → propose a doc update or a new custom skill ([10-skills-system.md](10-skills-system.md)).
+Claude Code loads `.claude/settings.json`. Session-start hooks point to workspace rules;
+PreToolUse guards match configured **MCP** tools, and the export reminder tracks MCP activity.
+They do not intercept shell HTTP clients, arbitrary scripts or Codex tool calls. These reminders
+are not automatic enforcement for API writes. API agents must use the authorization/read-back
+procedure above and their tool permission controls. Do not add broad shell approval prompts or
+silently install an MCP connection to compensate.
 
-## How the rules reach every agent, every time
+## Session records
 
-| Layer | Claude Code | Codex / Cursor / others |
-|---|---|---|
-| Global pointer (any folder) | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` |
-| Workspace rules | `CLAUDE.md` → `AGENTS.md` | `AGENTS.md` (§0 checklist is mandatory) |
-| Project rules | `n8n workflows/<slug>/AGENTS.md` | same |
-| Skills | `.claude/skills` → `Skills/` | `.agents/skills` → `Skills/` |
-| Session start | **Hook** adds a pointer to AGENTS.md, three reminders, the project list with statuses, and `AGENTS.local.md` (`scripts/hooks/session-start.mjs`). AGENTS.md stays the only full copy of the rules | the checklist in AGENTS.md |
-| Before n8n write/run MCP calls | **Hook** adds a rule reminder (`scripts/hooks/n8n-guard.mjs`), and forces a permission prompt for publish / unpublish / archive / production runs / Data Table deletes | the checklist in AGENTS.md |
-| End of a turn | **Hook** (`scripts/hooks/export-check.mjs`): if a workflow was created or updated but no export JSON / CHANGELOG was written, it sends the agent back once to export or say why not | the Finish item in AGENTS.md §0 |
-
-Hooks are configured in `.claude/settings.json` (committed). Claude Code asks you to trust the
-project's hooks the first time you open the workspace. To review or disable them, use `/hooks` in
-an interactive `claude` terminal. The skill junctions are recreated with `scripts/link-skills.mjs`.
+Keep project specs and supported operating instructions current. Preserve the owner's brief.
+Store audit reports, approvals, implementation plans and rollout evidence in the external private
+history configured by `AGENTS.local.md`; public docs describe behavior without private audit IDs
+or report links. End with what changed, which verification ran, and what remains on the owner's side.

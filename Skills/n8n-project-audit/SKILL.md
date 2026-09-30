@@ -1,6 +1,6 @@
 ---
 name: n8n-project-audit
-description: Audit an entire n8n automation project (or one workflow) against its own documentation, then propose numbered suggestions (fixes, improvements, polish, docs updates, and unnecessary workflows or nodes to remove) and ASK the owner to approve each one before changing anything. Reads the project's AGENTS.md, README, specs, architecture, decisions, and CHANGELOG as the reference, compares them with the live workflows and the repo exports, and runs the official review checklist plus the workspace standards. Use when the user says "audit", "review the project", "review this workflow", "health check", "what can be improved", "clean up", "polish", "is anything unused", "remove unnecessary workflows", "does it match the spec", or before a handover or go-live.
+description: "Review an n8n project or workflow against its brief, specs, exports and available live evidence. Use for audits, health checks, cleanup reviews and handover readiness; propose numbered changes and apply only explicitly approved scope, keeping reports outside Git."
 ---
 
 # n8n Project Audit (read everything → report → ask → apply only what's approved)
@@ -16,20 +16,22 @@ context, the workspace standards, the "is this still needed?" review, and the ap
 
 ## Non-negotiables
 
-1. **The audit phase is read-only.** Allowed: reading repo files, `search_workflows`,
+1. **The audit phase is read-only.** Load `n8n-workspace-access` and use authorized API GETs,
+   local JSON inspection, or available official MCP reads. MCP examples: `search_workflows`,
    `get_workflow_details`, `search_workflow_executions`, `get_workflow_execution`,
    `list_credentials`. **Not allowed while auditing:** `update_workflow`, `create_workflow_from_code`,
    `test_workflow`, `execute_workflow`, publish/unpublish/archive, and file edits other than the
-   audit report. *Why:* an audit must never cause a side effect, and a test run can send real emails.
+   external private audit report/index. *Why:* an audit must never cause a side effect, and a test run can send real emails.
 2. **The project documents are the reference.** Judge each workflow against what the project says it
    should do (spec, architecture, decisions), not only against generic best practice. If a
    `decisions.md` entry explains a deviation, it isn't a finding. Mention it at most as context.
 3. **Every finding has evidence**: the workflow and node name, what was seen (JSON terms, e.g.
    "`Send Alert` has `onError: continueRegularOutput` and nothing checks the result"), and which
    doc or standard it breaks. No vague "could be better".
-4. **Ask before acting, per suggestion.** Present the numbered list, then ask which ones to apply.
-   "Looks good" or "go ahead" without IDs means ask again which IDs. Approval covers only the IDs
-   named, and only in this conversation.
+4. **Apply only authorized scope.** Present numbered suggestions. Explicit IDs, "all fixes", or
+   an unambiguous "proceed" to a concrete scoped proposal authorize that scope. Ask only if scope
+   is unclear. Do not repeat approval already given; tests/publishing still need authorization for
+   their distinct effects. A review request alone never authorizes remediation.
 5. **Removal means archive, never delete, and only after a safety check** (Removal checks, below).
    Export first, so the repo keeps a copy in `workflows/_archive/`.
 6. **Confirm the instance** before reading (dev vs prod, from the project `AGENTS.md`). Auditing
@@ -53,6 +55,11 @@ context, the workspace standards, the "is this still needed?" review, and the ap
    error rate, last run, recurring error nodes. Open 1–2 failed executions with
    `get_workflow_execution` if errors repeat.
 
+API mode uses documented workflow/execution GETs with pagination instead of MCP calls. Do not
+invent credential-list or validation endpoints. Verify credentials manually where necessary.
+Local-only audits cannot establish publication, traffic, execution counts or current live drift;
+mark those checks unverified. Record inspected time range and missing/truncated history.
+
 ### Phase 2: Check (see [references/AUDIT_CHECKS.md](references/AUDIT_CHECKS.md))
 
 6. **Per workflow:** walk `REVIEW_CHECKLIST.md` (MUST FIX → SHOULD FIX → NICE TO HAVE).
@@ -66,9 +73,11 @@ context, the workspace standards, the "is this still needed?" review, and the ap
 
 ### Phase 3: Report and ask
 
-10. **Write the report** to `documentation/audits/YYYY-MM-DD-audit.md` in the project (format:
-    [references/REPORT_TEMPLATE.md](references/REPORT_TEMPLATE.md)). Writing this one file is
-    allowed. It's the record of the audit.
+10. **Write the report privately** under the external audit/update folder configured in
+    `AGENTS.local.md`, with date and project slug, and maintain its index (format:
+    [references/REPORT_TEMPLATE.md](references/REPORT_TEMPLATE.md)). Never save audit reports in
+    the public workspace or project Git repositories. If no private location is configured,
+    report in chat and ask for its location; do not invent an in-repo fallback.
 11. **Show the summary in chat:** a health line, then the suggestions grouped by type, each with
     its ID, one-line what/why, effort (S/M/L), and risk.
 12. **Ask for approval:** *"Which suggestions should I apply? Reply with IDs (e.g. F1, I2, R1), 'all
@@ -77,12 +86,15 @@ context, the workspace standards, the "is this still needed?" review, and the ap
 ### Phase 4: Apply only what's approved
 
 13. For each approved ID, in order Fix → Improve → Docs → Polish → Remove:
-    - load the matching skills (`Skills/INDEX.md`), change in **dev**, then `validate_workflow` →
-      `update_workflow` → `get_workflow_details` (connections + sections layout);
+    - load the matching skills and access router, prepare in **dev** or locally, use the chosen
+      method's available validation, and read back authorized saves (connections + layout + settings);
     - tests with side effects still need their own OK (`Documentation/08-testing-and-qa.md`);
-    - export (`n8n-workflow-export`) and add a CHANGELOG entry that references the audit report.
-14. **Publishing is separate.** Applying a fix to a live workflow ends in a draft. Publishing needs
-    The owner's explicit OK for that workflow, as always.
+    - export with source installation UID and add a CHANGELOG describing the behavior change;
+      private report IDs, paths and evidence stay in the external report, not public documentation.
+14. **Publishing is separate.** Do not assume a live update ends in a draft: verify the installed
+    version and access method, and treat published-target changes as potentially live. Prepare a
+    separate unpublished candidate when live modification is not authorized. Publishing needs
+    the owner's explicit OK for that workflow.
 15. **Update the report:** mark each suggestion `applied` / `declined` / `deferred`. Report what's
     pending on the owner's side.
 
@@ -124,10 +136,10 @@ and CHANGELOG. Archived workflows can be restored; nothing is deleted.
 | Fixing things during the audit | Unapproved changes, and side effects in live workflows | Read-only until approval (Non-negotiable 1) |
 | Generic best-practice findings that the project deliberately chose against | Noise; it contradicts the owner's decisions | Check `decisions.md` first (Non-negotiable 2) |
 | "Consider improving error handling" | Can't act on it, can't approve it | Evidence + exact change + ID |
-| Treating "go ahead" as approval for everything | Changes the owner didn't mean | Ask for IDs (Non-negotiable 4) |
+| Expanding a scoped "go ahead" to unrelated changes | Changes the owner didn't mean | Apply only the concrete approved proposal (Non-negotiable 4) |
 | Deleting a workflow | Irreversible; a client webhook may still call it | Archive after the removal checks |
 | Test runs to "confirm" a finding | Real emails/messages sent | Read past executions instead |
-| Report only in chat | Lost next session | `documentation/audits/YYYY-MM-DD-audit.md` |
+| Report only in chat or committed to Git | Lost history or private evidence exposure | External dated private report and index |
 | Auditing only the live workflows | Misses doc drift and repo exports that are out of date | Phase 1 reads all three sources |
 
 ## References

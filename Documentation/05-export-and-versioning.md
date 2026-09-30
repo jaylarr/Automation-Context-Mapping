@@ -19,16 +19,21 @@ upgraded, or misconfigured. Every shipped workflow lives in git as an **importab
 
 ## How to export
 
-### Option A: via agent + MCP (preferred)
-Use the **`n8n-workflow-export`** skill. It saves `get_workflow_details` to a `.raw.json` file and
-runs `node scripts/export-workflow.mjs`, the same sanitizer the Control Center's Import uses
+### Option A: via agent + API or optional MCP
+Use **`n8n-workspace-access`** and **`n8n-workflow-export`**. Read the workflow through the chosen
+method, sanitize and scan it in memory before saving checked temporary JSON, then
+run `node scripts/export-workflow.mjs`, the same sanitizer the Control Center's Import uses
 (`app/src/lib/sanitize-core.mjs`, covered by `npm test`). Or click **Import** on the Workflows page.
 
 ### Option B: manually from the n8n UI
 1. Open the workflow → `…` menu → **Download**.
-2. Save as `<slug>.raw.json` in the project's `workflows/` folder (`*.raw.json` is gitignored).
-3. Run `node scripts/export-workflow.mjs --project <slug> --raw "n8n workflows/<slug>/workflows/<slug>.raw.json"`
-   (or ask the agent). By hand only as a last resort, using the rules below.
+2. Keep the private download out of Git. Inspect/sanitize/scan it before copying checked input
+   into the project as `<name>.raw.json`; `.gitignore` is not a secret check.
+3. Resolve the immutable source installation UID from verified records/Control Center Settings.
+   Preview with `node scripts/export-workflow.mjs --project <slug> --installation <installation-uid> --raw "n8n workflows/<slug>/workflows/<name>.raw.json" --dry-run`.
+   Inspect the preview, then repeat without `--dry-run` to save (or ask the agent).
+   Existing files must have matching source bindings. Follow the binding procedure in
+   [Control Center operations](control-center-operations.md) for legacy exports; do not guess ownership.
 
 ## Sanitizing rules
 
@@ -39,7 +44,7 @@ runs `node scripts/export-workflow.mjs`, the same sanitizer the Control Center's
 | `meta.instanceId` | Remove | Instance-specific noise |
 | `id` (workflow id) | Keep, but document it in the project `AGENTS.md` | Useful to find the live workflow; harmless on import |
 | `versionId`, `active`, `shared`, `updatedAt`, `createdAt` | Remove | Instance state, not design |
-| `staticData` | Remove unless the workflow depends on seeded state | Runtime state |
+| `staticData` | Remove; document any intentional seed separately | Runtime state |
 | Hardcoded tokens/keys **anywhere** (headers, Set nodes, URLs, Code) | **Stop.** Move to a credential, then re-export | A secret in JSON is a leak ([06](06-credentials-and-security.md)) |
 | Client PII in node parameters or sticky notes | Replace with placeholders | The repo isn't a data store |
 
@@ -87,7 +92,8 @@ an undo button. **It is not a replacement for git.** It lives and dies with the 
 ## Importing a workflow (deploy or restore)
 
 **Easiest:** the **Restore to n8n** button on the workflow's row in the Control Center project page
-(updates or creates it, never publishes). Then do steps 2–5 below. By hand:
+(creates an unpublished workflow, or updates an existing target; a published target can remain live
+and requires explicit confirmation). Use its reference setup and preview. Then do steps 2–5 below. By hand:
 
 1. In the target instance: **Import from File** → pick `NN-<slug>.json`.
 2. **Re-bind credentials** on every node that uses one (the import matches by name, so check each

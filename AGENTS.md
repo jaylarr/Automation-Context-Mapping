@@ -19,7 +19,7 @@ Do these in order before your first action. "It's a quick change" is not an exce
       `client-brief/` (the client's own request: `brief.md` + `files/`). The brief is **read-only**
       for agents. If there's no project yet and the task is client work, use the
       `new-automation-project` skill.
-- [ ] **Skill:** open [Skills/INDEX.md](Skills/INDEX.md) and load `using-n8n-skills-official`, plus
+- [ ] **Skill:** open [Skills/INDEX.md](Skills/INDEX.md) and load `n8n-workspace-access`, plus
       every skill whose trigger matches the task. Re-load a skill at the moment of decision; having
       read it earlier in the session doesn't count.
 - [ ] **Size:** new project (or a feature adding ~10+ nodes)? Load `n8n-project-sizing`: estimate
@@ -31,7 +31,7 @@ Do these in order before your first action. "It's a quick change" is not an exce
 - [ ] **Spec:** the workflow has a spec in `documentation/spec/` (the short template is fine). No
       spec? Write it with the owner before building. Small job: three lines are enough (**Trigger**,
       **Result**, **On failure**), agreed in chat and saved as the spec.
-- [ ] **Instance:** before any n8n MCP call that writes or runs something, confirm which instance
+- [ ] **Instance:** before any n8n API or MCP call that writes or runs something, confirm which instance
       you're connected to (dev, never prod by accident). Single instance: a **published** workflow
       is prod, so ask before updating it ([07](Documentation/07-self-hosted-environments.md)).
 - [ ] **Finish:** kept changes are exported (`n8n-workflow-export`), with CHANGELOG and docs updated in
@@ -68,8 +68,10 @@ Full details: [Documentation/01-workspace-structure.md](Documentation/01-workspa
 2. **Secrets never go in text fields, workflow JSON, docs, or git.** Use the n8n credential system.
    If a secret is pasted in chat, tell the owner to rotate it.
    See [06-credentials-and-security.md](Documentation/06-credentials-and-security.md).
-3. **Validate, verify, test, then publish.** Run `validate_workflow`, then `get_workflow_details`
-   to check `connections`. Test with pinned data, and publish only after that. Ask before a test
+3. **Validate, verify, test, then publish.** In MCP mode use the available validation tools; in API
+   or local mode perform documented structural/node checks and disclose unavailable validation.
+   Read back live saves through API/MCP to check `connections`, layout and settings. Test with
+   supported pinned data or mocks, and publish only after verification. Ask before a test
    run that would fire real side effects. See [08-testing-and-qa.md](Documentation/08-testing-and-qa.md).
 4. **Every workflow that ships is exported to the repo.** Save a sanitized, importable JSON in the
    project's `workflows/` folder and add a `CHANGELOG.md` entry. Use the `n8n-workflow-export`
@@ -109,7 +111,7 @@ Full rules: [03-naming-conventions.md](Documentation/03-naming-conventions.md) Â
 |---|---|
 | Start a new automation project | `new-automation-project` skill (or `node scripts/new-project.mjs --name <kebab-name>`) |
 | Size a project: one workflow or several? | `n8n-project-sizing` skill (estimate nodes, then ask the owner) |
-| Build or edit a workflow via MCP | [11-ai-agent-workflow.md](Documentation/11-ai-agent-workflow.md) + `using-n8n-skills-official` |
+| Build or edit a workflow via API, MCP or local JSON | [11-ai-agent-workflow.md](Documentation/11-ai-agent-workflow.md) + `n8n-workspace-access` |
 | Save a workflow from n8n into the repo | `n8n-workflow-export` skill |
 | Hand a project over to the client | `project-handover-docs` skill |
 | Review or audit a project or workflow | `n8n-project-audit` skill (reads the project docs, uses the official `REVIEW_CHECKLIST.md`, asks before changing anything) |
@@ -121,7 +123,9 @@ Full rules: [03-naming-conventions.md](Documentation/03-naming-conventions.md) Â
 
 - **n8n:** self-hosted. Each project records its instance(s) (dev/prod URL, n8n version) in its own
   `AGENTS.md`. Never assume which instance you're connected to. Check first.
-- **MCP:** the official n8n instance-level MCP (`get_workflow_sdk_reference`, `search_nodes`,
+- **Access:** Control Center uses the public REST API with `X-N8N-API-KEY`; it does not require MCP.
+  Agents use the owner's chosen API, optional MCP, or local JSON mode via `n8n-workspace-access`.
+- **Optional MCP:** the official n8n instance-level MCP (`get_workflow_sdk_reference`, `search_nodes`,
   `get_node_types`, `validate_workflow`, `create_workflow_from_code`, `update_workflow`, â€¦).
   Tool names drift between versions, so trust the live tool list.
 - **OS:** Windows, macOS or Linux. Workspace scripts are Node (`node scripts/<name>.mjs`); the `.ps1`

@@ -8,6 +8,11 @@ suggestion (`F`/`I`/`P`/`D`/`R`) with evidence.
 Walk `Skills/n8n-workflow-lifecycle-official/references/REVIEW_CHECKLIST.md` for every workflow in
 scope. Map its tiers: MUST FIX → `F`, SHOULD FIX → `I`, NICE TO HAVE → `P`.
 
+Use the selected access method from `n8n-workspace-access`. MCP examples below also permit
+documented API read-back; local JSON proves only saved design. Separate current publication,
+live persistence, structural checks, mock testing and live execution evidence. Incomplete
+execution history is not evidence of no callers/traffic; unknown removal checks block removal.
+
 ## 2. Workspace standards
 
 | Check | Standard | Typical ID |

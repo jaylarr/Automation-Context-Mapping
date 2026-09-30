@@ -20,7 +20,7 @@ they conflict. **Facts and exceptions only. Don't repeat the global rules.**
 
 ## n8n instances
 
-| Env | URL | n8n version | n8n folder | MCP connected? |
+| Env | URL | n8n version | n8n folder (if supported) | Access (API / optional MCP / local JSON) |
 |---|---|---|---|---|
 | dev | `TODO` | `TODO` | `{{PROJECT_SLUG}}` | `TODO` |
 | prod | `TODO` | `TODO` | `{{PROJECT_SLUG}}` | `TODO` |
