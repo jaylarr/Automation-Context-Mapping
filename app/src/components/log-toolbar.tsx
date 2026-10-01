@@ -32,6 +32,7 @@ export function LogToolbar({
       else next.delete(k)
     }
     next.delete('page')
+    next.delete('focus')
     startTransition(() => router.replace(`${pathname}?${next.toString()}`, { scroll: false }))
   }
 

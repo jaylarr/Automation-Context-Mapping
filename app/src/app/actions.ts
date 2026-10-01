@@ -16,7 +16,7 @@ import { redirect } from 'next/navigation'
 import { logActivity } from '@/lib/logs'
 import { api, invalidateWorkflowList, isConfigured, setWorkflowPublished, syncExecutions, testConnection } from '@/lib/n8n'
 import { type CaptureSpec, MAX_CAPTURES, type RunData, parsePath, samplePaths } from '@/lib/capture'
-import { LOG_MODES, type PrefsInput, purgeNonMatching, saveWorkflowPrefs } from '@/lib/workflow-prefs'
+import { LOG_MODES, type PrefsInput, purgeNonMatching, saveWorkflowPrefs, turnOffWorkflowLogs } from '@/lib/workflow-prefs'
 import { addInstance, clearInstanceKey, connectedInstances, getInstance, listInstances, removeInstance, updateInstance } from '@/lib/instances'
 import { INSTANCE_COOKIE } from '@/lib/instance-filter'
 import { cookies } from 'next/headers'
@@ -503,6 +503,17 @@ const optInt = (v: unknown, min: number, max: number): number | null | undefined
   if (v === null || v === '' || v === undefined) return null
   const n = Number(v)
   return Number.isInteger(n) && n >= min && n <= max ? n : undefined
+}
+
+export async function turnOffWorkflowLogsAction(targets: { instanceId: string; workflowId: string; workflowName: string }[]): Promise<ActionState> {
+  if (!Array.isArray(targets) || !targets.length || targets.length > 5000 || targets.some(t => !t || !getInstance(t.instanceId) || !/^[A-Za-z0-9_-]{1,64}$/.test(t.workflowId) || typeof t.workflowName !== 'string' || t.workflowName.length > 300))
+    return { ok: false, message: 'Invalid workflow selection. Refresh the workflow list.' }
+  try {
+    turnOffWorkflowLogs(targets)
+    logActivity({ action: 'workflow.logging.off', message: `Detailed logging turned off for ${targets.length} workflows. Excluded from default statistics; existing logs kept.` })
+    revalidatePath('/', 'layout')
+    return { ok: true, message: `Logging off for ${targets.length} workflows. Existing logs kept. Use Show all statistics on Overview to include their outcomes.` }
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : 'Could not update logging.' } }
 }
 
 export async function saveWorkflowPrefsAction(

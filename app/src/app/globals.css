@@ -1824,3 +1824,15 @@ label.option {
   background: var(--err);
   opacity: 0.88;
 }
+/* A single quiet pulse for the execution linked from Recent failures. */
+@keyframes execution-highlight {
+  from { background-color: color-mix(in srgb, var(--err) 18%, var(--surface)); }
+  to { background-color: transparent; }
+}
+.execution-highlight > td { animation: execution-highlight 1s ease-out; }
+.chart svg a { cursor: pointer; }
+.chart svg a:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+.legend > a { display: inline-flex; align-items: center; gap: var(--s-2); }
+@media (prefers-reduced-motion: reduce) {
+  .execution-highlight > td { animation: none; background-color: color-mix(in srgb, var(--err) 12%, transparent); }
+}

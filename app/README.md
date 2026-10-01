@@ -189,12 +189,29 @@ or uncommitted files, because then the folder is the only copy. n8n itself is ne
 
 ## Per-workflow settings
 
+**Turn off all workflow logs** on the Workflows page stops detailed logging for every loaded
+workflow in the selected instance scope, including archived and filtered-out rows. Review the
+confirmation count before applying. It preserves existing logs and all unrelated preferences;
+new workflows retain their default settings. Nothing changes in n8n.
+
+Workflows set to **Stop tracking** are excluded from Overview statistics and recent failures by
+default. **Show all statistics** on Overview includes minimal observed outcomes from those
+workflows and workflows explicitly excluded from statistics. Ignored manual runs remain excluded.
+It does not resume detailed logging or reconstruct missing logs. Re-enable logging per workflow
+through its settings; its previous statistics exclusion preference is preserved.
+
+The execution chart's gray/red segments, legend and table counts open execution Logs with
+the corresponding success/failed filter. Daily segments also select that UTC day. Failed includes
+both error and crashed outcomes. Clicking a recent failure opens its exact execution in the right
+instance and page, scrolls to it and highlights it gently for one second. Reduced-motion users get
+a brief static highlight. Date and linked-instance filters are visible and can be cleared.
+
 Workflows → ⚙ on a row. These settings live only in the Control Center's local database. None of
 them change anything in n8n:
 
 | Setting | Effect |
 |---|---|
-| **What gets logged** | All runs (default) · Errors only · Success only · Stop tracking. Controls detailed logs; minimal outcome facts still support health and metrics |
+| **What gets logged** | All runs (default) · Errors only · Success only · Stop tracking. Stop tracking also hides the workflow from default statistics; minimal outcomes support health and the optional all-statistics view |
 | **Ignore test runs** | Skips runs started by hand from the n8n editor (execution mode `manual`) |
 | **Also remove already-logged runs** | One-off cleanup of stored runs that the new setting would no longer log |
 | **Keep this workflow's logs for N days** | Overrides the global retention (Settings) for this workflow only |

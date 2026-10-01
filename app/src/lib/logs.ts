@@ -1,5 +1,5 @@
 import { db } from './db'
-import { NOT_EXCLUDED_OR_SNOOZED_SQL, NOT_EXCLUDED_SQL } from './workflow-prefs'
+import { ALL_STATISTICS_SQL, NOT_EXCLUDED_OR_SNOOZED_SQL, NOT_EXCLUDED_SQL } from './workflow-prefs'
 import { searchTerms } from './search'
 
 export type Level = 'info' | 'success' | 'warn' | 'error'
@@ -69,7 +69,7 @@ export function logActivity(entry: {
 
 // ---------------------------------------------------------------- shared query builder
 
-type Filters = { q?: string; level?: string; project?: string; page?: number; instance?: string | null }
+type Filters = { q?: string; level?: string; project?: string; page?: number; instance?: string | null; day?: string; focus?: string }
 
 function buildWhere(
   f: Filters,
@@ -78,8 +78,8 @@ function buildWhere(
   const clauses: string[] = []
   const params: unknown[] = []
   if (f.level) {
-    clauses.push(`${cols.level} = ?`)
-    params.push(f.level)
+    if (cols.level === 'status' && f.level === 'failed') clauses.push("status IN ('error','crashed')")
+    else { clauses.push(`${cols.level} = ?`); params.push(f.level) }
   }
   if (f.project) {
     clauses.push(`${cols.project} = ?`)
@@ -97,6 +97,10 @@ function buildWhere(
       clauses.push('(' + cols.search.map((c) => `unorm(${c}) LIKE ? ESCAPE '\\'`).join(' OR ') + ')')
       for (let i = 0; i < cols.search.length; i++) params.push(needle)
     }
+  }
+  if (cols.instance && f.day && /^\d{4}-\d{2}-\d{2}$/.test(f.day)) {
+    clauses.push('substr(started_at, 1, 10) = ?')
+    params.push(f.day)
   }
   return { where: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', params }
 }
@@ -128,12 +132,21 @@ export function listEvents(f: Filters): Page<EventRow> {
 }
 
 export function listExecutions(f: Filters): Page<ExecutionRow> {
-  return paged('executions', 'started_at DESC', f, {
+  const cols = {
     level: 'status',
     project: 'project',
     search: ['workflow_name', 'error_message', 'error_node', 'id', 'captured', 'project', 'status', 'mode'],
     instance: 'instance_id',
-  })
+  }
+  const order = 'started_at DESC, id DESC, instance_id ASC'
+  let page = f.page
+  // Resolve the exact row's page inside the active filters, including its installation.
+  if (f.focus && f.instance) {
+    const { where, params } = buildWhere(f, cols)
+    const target = db.prepare(`SELECT position FROM (SELECT id, instance_id, ROW_NUMBER() OVER (ORDER BY ${order}) position FROM executions ${where}) WHERE id = ? AND instance_id = ?`).get(...params, f.focus, f.instance) as { position: number } | undefined
+    if (target) page = Math.ceil(target.position / PAGE_SIZE)
+  }
+  return paged('executions', order, { ...f, page }, cols)
 }
 
 // ---------------------------------------------------------------- events
@@ -225,7 +238,8 @@ function pruneExecutions(globalCutoff: string): number {
 export type DayBucket = { day: string; success: number; error: number; other: number }
 
 /** `instance` null = all instances. */
-export function executionsPerDay(days: number, instance: string | null = null): DayBucket[] {
+export function executionsPerDay(days: number, instance: string | null = null, includeAll = false): DayBucket[] {
+  const statsWhere = includeAll ? ALL_STATISTICS_SQL : NOT_EXCLUDED_SQL
   const since = new Date(Date.now() - (days - 1) * 86_400_000)
   since.setUTCHours(0, 0, 0, 0)
   const rows = db
@@ -234,7 +248,7 @@ export function executionsPerDay(days: number, instance: string | null = null): 
               SUM(status = 'success') success,
               SUM(status IN ('error','crashed')) error,
               SUM(status NOT IN ('success','error','crashed')) other
-       FROM execution_facts e WHERE started_at >= ? AND (? IS NULL OR instance_id = ?) AND ${NOT_EXCLUDED_SQL} GROUP BY day`,
+       FROM execution_facts e WHERE started_at >= ? AND (? IS NULL OR instance_id = ?) AND ${statsWhere} GROUP BY day`,
     )
     .all(since.toISOString(), instance, instance) as DayBucket[]
   const byDay = new Map(rows.map((r) => [r.day, r]))
@@ -246,18 +260,19 @@ export function executionsPerDay(days: number, instance: string | null = null): 
   return out
 }
 
-export function overviewCounts(instance: string | null = null) {
+export function overviewCounts(instance: string | null = null, includeAll = false) {
+  const statsWhere = includeAll ? ALL_STATISTICS_SQL : NOT_EXCLUDED_SQL
   const dayAgo = new Date(Date.now() - 86_400_000).toISOString()
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
   const one = <T>(sql: string, ...p: unknown[]) => db.prepare(sql).get(...p) as T
   const exec24 = one<{ total: number; errors: number }>(
-    `SELECT COUNT(*) total, COALESCE(SUM(status IN ('error','crashed')),0) errors FROM execution_facts e WHERE started_at >= ? AND (? IS NULL OR instance_id = ?) AND ${NOT_EXCLUDED_SQL}`,
+    `SELECT COUNT(*) total, COALESCE(SUM(status IN ('error','crashed')),0) errors FROM execution_facts e WHERE started_at >= ? AND (? IS NULL OR instance_id = ?) AND ${statsWhere}`,
     dayAgo,
     instance,
     instance,
   )
   const exec7 = one<{ total: number; ok: number }>(
-    `SELECT COALESCE(SUM(status IN ('success','error','crashed')),0) total, COALESCE(SUM(status = 'success'),0) ok FROM execution_facts e WHERE started_at >= ? AND (? IS NULL OR instance_id = ?) AND ${NOT_EXCLUDED_SQL}`,
+    `SELECT COALESCE(SUM(status IN ('success','error','crashed')),0) total, COALESCE(SUM(status = 'success'),0) ok FROM execution_facts e WHERE started_at >= ? AND (? IS NULL OR instance_id = ?) AND ${statsWhere}`,
     weekAgo,
     instance,
     instance,

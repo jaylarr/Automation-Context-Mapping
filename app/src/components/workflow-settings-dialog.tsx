@@ -194,6 +194,7 @@ export function WorkflowSettingsDialog({
                 </label>
               ))}
             </div>
+            {logMode === 'off' && <p className="small muted">Excluded from default Overview statistics. Use Show all statistics on Overview to include minimal outcomes without saving detailed logs.</p>}
             <div className="options">
               <label className="option">
                 <input type="checkbox" checked={ignoreManual} onChange={(e) => setIgnoreManual(e.target.checked)} disabled={logMode === 'off'} />

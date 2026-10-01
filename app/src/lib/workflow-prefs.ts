@@ -133,6 +133,18 @@ export function prefsMap(instanceId?: string | null): Map<string, WorkflowPrefs>
   return new Map(listWorkflowPrefs(instanceId).map((p) => [prefsKey(p.instanceId, p.workflowId), p]))
 }
 
+/** Local preferences only; preserve every unrelated setting and all existing logs. */
+export function turnOffWorkflowLogs(targets: { instanceId: string; workflowId: string; workflowName: string }[]): void {
+  const update = db.prepare(`INSERT INTO workflow_prefs(instance_id, workflow_id, workflow_name, log_mode) VALUES(?, ?, ?, 'off')
+    ON CONFLICT(instance_id, workflow_id) DO UPDATE SET log_mode = 'off', workflow_name = excluded.workflow_name,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`)
+  db.transaction(() => {
+    for (const t of targets) {
+      update.run(t.instanceId, t.workflowId, t.workflowName)
+    }
+  })()
+}
+
 export type PrefsInput = Pick<
   WorkflowPrefs,
   'logMode' | 'ignoreManual' | 'excludeFromStats' | 'expectEveryHours' | 'alertAfterFailures' | 'snoozedUntil' | 'retentionDays' | 'notes' | 'runbookUrl' | 'captures'
@@ -292,7 +304,10 @@ export function workflowAlerts(instanceId?: string | null, now = Date.now()): Wo
 }
 
 /** SQL fragment that drops executions of workflows hidden from stats. Alias the executions table as `e`. */
-export const NOT_EXCLUDED_SQL = `NOT EXISTS (SELECT 1 FROM workflow_prefs wp WHERE wp.instance_id = e.instance_id AND wp.workflow_id = e.workflow_id AND (wp.exclude_from_stats = 1 OR (wp.ignore_manual = 1 AND e.mode = 'manual')))`
+export const NOT_EXCLUDED_SQL = `NOT EXISTS (SELECT 1 FROM workflow_prefs wp WHERE wp.instance_id = e.instance_id AND wp.workflow_id = e.workflow_id AND (wp.log_mode = 'off' OR wp.exclude_from_stats = 1 OR (wp.ignore_manual = 1 AND e.mode = 'manual')))`
+
+/** All-statistics view still respects the owner's ignore-test-runs preference. */
+export const ALL_STATISTICS_SQL = `NOT EXISTS (SELECT 1 FROM workflow_prefs wp WHERE wp.instance_id = e.instance_id AND wp.workflow_id = e.workflow_id AND wp.ignore_manual = 1 AND e.mode = 'manual')`
 
 /** Same, and also hides snoozed workflows (for "recent failures" style lists). */
-export const NOT_EXCLUDED_OR_SNOOZED_SQL = `NOT EXISTS (SELECT 1 FROM workflow_prefs wp WHERE wp.instance_id = e.instance_id AND wp.workflow_id = e.workflow_id AND (wp.exclude_from_stats = 1 OR wp.snoozed_until > strftime('%Y-%m-%dT%H:%M:%fZ','now')))`
+export const NOT_EXCLUDED_OR_SNOOZED_SQL = `NOT EXISTS (SELECT 1 FROM workflow_prefs wp WHERE wp.instance_id = e.instance_id AND wp.workflow_id = e.workflow_id AND (wp.log_mode = 'off' OR wp.exclude_from_stats = 1 OR wp.snoozed_until > strftime('%Y-%m-%dT%H:%M:%fZ','now')))`

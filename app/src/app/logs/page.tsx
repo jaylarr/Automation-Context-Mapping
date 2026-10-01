@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { Activity, Inbox, ScrollText } from 'lucide-react'
 import { ActionButton } from '@/components/action-button'
 import { LogToolbar } from '@/components/log-toolbar'
+import { ExecutionFocus } from '@/components/execution-focus'
 import { EmptyState, PageHeader, Pager, StatusBadge } from '@/components/ui'
 import { syncNowAction } from '../actions'
 import { dateTime, duration, relativeTime } from '@/lib/format'
@@ -23,7 +24,7 @@ const TABS = [
 ] as const
 type Tab = (typeof TABS)[number]['id']
 
-const EXEC_STATUSES = ['success', 'error', 'crashed', 'running', 'waiting', 'canceled']
+const EXEC_STATUSES = ['success', 'failed', 'error', 'crashed', 'running', 'waiting', 'canceled']
 
 function pretty(json: string | null): string | null {
   if (!json) return null
@@ -38,16 +39,17 @@ export default async function LogsPage(props: PageProps<'/logs'>) {
   const sp = await props.searchParams
   const get = (k: string) => (typeof sp[k] === 'string' ? (sp[k] as string) : undefined)
   const tab: Tab = (TABS.find((t) => t.id === get('tab'))?.id ?? 'executions') as Tab
-  const instanceFilter = await getInstanceFilter()
   const instances = listInstances()
+  const requestedInstance = get('instance')
+  const instanceFilter = requestedInstance && instances.some(i => i.id === requestedInstance) ? requestedInstance : await getInstanceFilter()
   const instanceNames = Object.fromEntries(instances.map((i) => [i.id, i.name]))
   const showInstance = !instanceFilter && instances.filter((i) => i.hasKey).length > 1
-  const filters = { q: get('q'), level: get('level'), project: get('project'), page: Number(get('page')) || 1, instance: instanceFilter }
+  const filters = { q: get('q'), level: get('level'), project: get('project'), page: Number(get('page')) || 1, instance: instanceFilter, day: get('day'), focus: get('focus') }
   const projects = [...new Set([...listProjects().map((p) => p.slug), ...knownProjectsInLogs()])].sort()
 
   const href = (patch: Record<string, string | number | undefined>) => {
     const p = new URLSearchParams()
-    for (const [k, v] of Object.entries({ tab, q: filters.q, level: filters.level, project: filters.project, ...patch }))
+    for (const [k, v] of Object.entries({ tab, q: filters.q, level: filters.level, project: filters.project, day: filters.day, instance: requestedInstance, ...patch }))
       if (v !== undefined && v !== '') p.set(k, String(v))
     return `/logs?${p.toString()}`
   }
@@ -82,6 +84,7 @@ export default async function LogsPage(props: PageProps<'/logs'>) {
       />
 
       {tab === 'executions' && <FilteredNote instance={instanceFilter} />}
+      {tab === 'executions' && (filters.day || requestedInstance) && <p className="small muted">{filters.day ? `Day: ${filters.day} UTC. ` : ''}{requestedInstance && instanceFilter ? `Instance: ${instanceNames[instanceFilter]}. ` : ''}<Link href={href({ day: undefined, instance: undefined })}>Clear date and linked instance</Link></p>}
       {tab === 'executions' && <Executions filters={filters} href={href} instanceNames={instanceNames} showInstance={showInstance} />}
       {tab === 'events' && <Events filters={filters} href={href} />}
       {tab === 'activity' && <ActivityLog filters={filters} href={href} />}
@@ -90,7 +93,7 @@ export default async function LogsPage(props: PageProps<'/logs'>) {
 }
 
 type Props = {
-  filters: { q?: string; level?: string; project?: string; page: number; instance?: string | null }
+  filters: { q?: string; level?: string; project?: string; page: number; instance?: string | null; day?: string; focus?: string }
   href: (patch: Record<string, string | number | undefined>) => string
 }
 
@@ -111,6 +114,7 @@ function Executions({
     )
   return (
     <div className="stack-sm">
+      {filters.focus && filters.instance && <ExecutionFocus execution={filters.focus} instance={filters.instance} />}
       <div className="table-wrap">
         <table className="table">
           <thead>
@@ -126,7 +130,7 @@ function Executions({
           </thead>
           <tbody>
             {data.rows.map((e) => (
-              <tr key={e.id}>
+              <tr key={`${e.instance_id}:${e.id}`} data-execution={e.id} data-instance={e.instance_id}>
                 <td>
                   <StatusBadge status={e.status} />
                 </td>

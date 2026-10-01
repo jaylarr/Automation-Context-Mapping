@@ -13,13 +13,14 @@ import { listProjects } from '@/lib/projects'
 import { workflowAlerts } from '@/lib/workflow-prefs'
 import { getMeta } from '@/lib/settings'
 
-export default async function OverviewPage() {
+export default async function OverviewPage(props: PageProps<'/'>) {
+  const includeAll = (await props.searchParams).stats === 'all'
   const instanceFilter = await getInstanceFilter()
   const selectedInstance = instanceFilter ? listInstances().find((i) => i.id === instanceFilter) : null
   const instanceName = selectedInstance?.name
   const projects = listProjects()
-  const counts = overviewCounts(instanceFilter)
-  const perDay = executionsPerDay(14, instanceFilter)
+  const counts = overviewCounts(instanceFilter, includeAll)
+  const perDay = executionsPerDay(14, instanceFilter, includeAll)
   const errors = recentErrors(4, instanceFilter)
   const alerts = workflowAlerts(instanceFilter)
   const events = recentEvents(6)
@@ -87,6 +88,10 @@ export default async function OverviewPage() {
         </div>
       )}
 
+      <div className="row" style={{ marginBottom: 'var(--s-3)' }}>
+        <Link href={includeAll ? '/' : '/?stats=all'} className="btn" aria-pressed={includeAll}>{includeAll ? 'Show tracked statistics' : 'Show all statistics'}</Link>
+        <span className="small muted">{includeAll ? 'Includes workflows with logging off or excluded from statistics. Ignored test runs remain excluded.' : 'Workflows with logging off or excluded from statistics are hidden.'}</span>
+      </div>
       <section className="grid grid-stats" aria-label="Key numbers">
         <Stat icon={FolderKanban} label="Active projects" value={active.length} note={`${projects.length} total`} />
         <Stat icon={Workflow} label="Workflows in repo" value={workflowCount} note="exported JSON files" />
@@ -104,7 +109,7 @@ export default async function OverviewPage() {
             </Link>
           </div>
           {configured ? (
-            <ExecChart data={perDay} />
+            <ExecChart data={perDay} instance={instanceFilter} />
           ) : (
             <EmptyState icon={Activity} title="Connect n8n to see executions" action={<Link href="/settings" className="btn">Open settings</Link>}>
               Add an n8n instance with its API key in Settings. No restart needed.
@@ -115,7 +120,7 @@ export default async function OverviewPage() {
         <div className="card">
           <div className="card-head">
             <h2>Recent failures</h2>
-            <Link href="/logs?tab=executions&level=error" className="card-link">
+            <Link href="/logs?tab=executions&level=failed" className="card-link">
               View <ArrowRight size={14} aria-hidden />
             </Link>
           </div>
@@ -124,7 +129,7 @@ export default async function OverviewPage() {
           ) : (
             <div className="list">
               {errors.map((e) => (
-                <div key={e.id} className="list-item">
+                <Link key={`${e.instance_id}:${e.id}`} href={`/logs?${new URLSearchParams({ tab: 'executions', level: 'failed', instance: e.instance_id, focus: e.id })}`} className="list-item">
                   <AlertOctagon size={16} style={{ color: 'var(--err)', flex: 'none', marginTop: '0.2rem' }} aria-hidden />
                   <div className="list-body">
                     <span className="truncate">{e.workflow_name ?? `Workflow ${e.workflow_id}`}</span>
@@ -134,7 +139,7 @@ export default async function OverviewPage() {
                     </span>
                     <span className="list-meta">{relativeTime(e.started_at)}</span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}

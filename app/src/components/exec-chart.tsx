@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 
 export type Bucket = { day: string; success: number; error: number; other: number }
 
@@ -30,7 +31,8 @@ function colPath(x: number, y: number, w: number, h: number, r: number): string 
 const fmtDay = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 
-export function ExecChart({ data }: { data: Bucket[] }) {
+export function ExecChart({ data, instance }: { data: Bucket[]; instance?: string | null }) {
+  const href = (level: string, day?: string) => `/logs?${new URLSearchParams({ tab: 'executions', level, ...(instance ? { instance } : {}), ...(day ? { day } : {}) })}`
   const [hover, setHover] = useState<number | null>(null)
   const totals = data.map((d) => d.success + d.error + d.other)
   const max = niceMax(Math.max(0, ...totals))
@@ -45,17 +47,17 @@ export function ExecChart({ data }: { data: Bucket[] }) {
 
   return (
     <div className="chart">
-      <div className="legend" aria-hidden>
-        <span>
+      <div className="legend">
+        <Link href={href('success')}>
           <i className="swatch" style={{ background: 'var(--chart-ok)' }} /> Successful
-        </span>
-        <span>
+        </Link>
+        <Link href={href('failed')}>
           <i className="swatch" style={{ background: 'var(--chart-err)' }} /> Failed
-        </span>
+        </Link>
       </div>
 
       <div className="chart-plot">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Executions per day, last ${data.length} days`}>
+      <svg viewBox={`0 0 ${W} ${H}`} role="group" aria-label={`Executions per day, last ${data.length} days`}>
         {ticks.map((t) => (
           <g key={t}>
             <line className="gridline" x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} />
@@ -75,18 +77,20 @@ export function ExecChart({ data }: { data: Bucket[] }) {
           const hasErr = d.error > 0
           const showLabel = i === 0 || i === data.length - 1 || i % Math.ceil(data.length / 7) === 0
           return (
-            <g key={d.day} opacity={hover === null || hover === i ? 1 : 0.45}>
-              {okV > 0 &&
-                (hasErr ? (
+            <g key={d.day} opacity={hover === null || hover === i ? 1 : 0.45} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(i)} onBlur={() => setHover(null)}>
+              {okV > 0 && <a href={href('success', d.day)} aria-label={`${d.day} UTC: ${d.success} successful executions`}>
+                {hasErr ? (
                   <rect x={x} y={okTop} width={colW} height={y(0) - okTop} fill="var(--chart-ok)" />
                 ) : (
                   <path d={colPath(x, okTop, colW, y(0) - okTop, 4)} fill="var(--chart-ok)" />
-                ))}
+                )}</a>}
               {hasErr && (
+                <a href={href('failed', d.day)} aria-label={`${d.day} UTC: ${d.error} failed executions`}>
                 <path
                   d={colPath(x, errTop, colW, Math.max(0, okTop - errTop - (okV > 0 ? GAP : 0)), 4)}
                   fill="var(--chart-err)"
                 />
+                </a>
               )}
               {d.other > 0 && <rect x={x} y={y(okV + d.error + d.other)} width={colW} height={Math.max(0, errTop - y(okV + d.error + d.other))} fill="var(--text-3)" />}
               {showLabel && (
@@ -101,7 +105,7 @@ export function ExecChart({ data }: { data: Bucket[] }) {
                 width={band}
                 height={innerH}
                 fill="transparent"
-                tabIndex={0}
+                pointerEvents="none"
                 aria-label={`${d.day} UTC: ${d.success} successful, ${d.error} failed, ${d.other} other`}
                 onFocus={() => setHover(i)}
                 onBlur={() => setHover(null)}
@@ -160,8 +164,8 @@ export function ExecChart({ data }: { data: Bucket[] }) {
               {data.map((d) => (
                 <tr key={d.day}>
                   <td>{d.day}</td>
-                  <td className="num">{d.success}</td>
-                  <td className="num">{d.error}</td>
+                  <td className="num"><Link href={href('success', d.day)}>{d.success}</Link></td>
+                  <td className="num"><Link href={href('failed', d.day)}>{d.error}</Link></td>
                   <td className="num">{d.other}</td>
                 </tr>
               ))}
