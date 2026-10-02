@@ -6,6 +6,7 @@ import { type ActionState, deleteBriefFileAction, saveBriefAction, uploadBriefFi
 import type { BriefFile, BriefState } from '@/lib/brief'
 import { relativeTime } from '@/lib/format'
 import { ConfirmDialog } from './confirm-dialog'
+import { DocumentPreview } from './document-preview'
 
 function bytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -136,7 +137,7 @@ export function ClientBrief({
       ) : (
         <>
           {state === 'filled' ? (
-            children
+            <DocumentPreview source={source ?? ''} label="client brief">{children}</DocumentPreview>
           ) : (
             <p className="muted small">
               No brief yet. Paste what the client asked for (their email, message, or call notes) and add the files they sent. Agents read this before

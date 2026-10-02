@@ -1153,6 +1153,38 @@ table.table {
 }
 
 /* ---------------------------------------------------------------- markdown */
+.document-preview summary {
+  cursor: pointer;
+  color: var(--text-2);
+}
+
+.document-preview-excerpt {
+  display: block;
+  margin-bottom: var(--s-3);
+  overflow-wrap: anywhere;
+}
+
+.document-preview-expand,
+.document-preview-collapse {
+  font-size: var(--t-xs);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.document-preview-collapse,
+.document-preview[open] .document-preview-expand,
+.document-preview[open] .document-preview-excerpt {
+  display: none;
+}
+
+.document-preview[open] .document-preview-collapse {
+  display: inline;
+}
+
+.document-preview-body {
+  margin-top: var(--s-3);
+}
+
 .prose {
   font-size: var(--t-md);
   line-height: 1.7;

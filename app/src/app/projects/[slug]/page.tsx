@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { ArrowLeft, ArrowRight, FileJson, FileText } from 'lucide-react'
 import { ClientBrief } from '@/components/client-brief'
+import { DocumentPreview } from '@/components/document-preview'
 import { CopyButton } from '@/components/copy-button'
 import { Markdown } from '@/components/markdown'
 import { TestResults } from '@/components/test-results'
@@ -147,6 +148,7 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
             {doc === null ? (
               <p className="muted small">Document not found.</p>
             ) : (
+              <DocumentPreview key={`${slug}:${docPath}`} source={doc} label={docPath === 'README.md' ? 'README' : 'document'}>
               <Markdown
                 source={doc}
                 docId={`${prefix}${docPath}`}
@@ -157,6 +159,7 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
                     : `/docs?id=${encodeURIComponent(id)}`
                 }}
               />
+              </DocumentPreview>
             )}
           </div>
         </div>

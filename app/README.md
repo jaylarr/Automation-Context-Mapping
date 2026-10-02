@@ -256,6 +256,10 @@ workspace naming convention) or tagged with the project slug.
 
 ## Design
 
+Individual project pages show compact previews of the client brief and README (or selected document).
+Use **Show full** to expand a section and **Collapse** to close it. Brief editing and client files
+remain available independently of the preview.
+
 - Palette: `#000000` · `#1F150C` · `#412D15` · `#E1DCC9`. Dark by default, with a light theme
   toggle (remembered per browser).
 - **Viewport-based sizing:** the root font size is `clamp(14px, 0.5vw + 9px, 20px)`, and all
