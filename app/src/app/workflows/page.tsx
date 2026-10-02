@@ -15,6 +15,10 @@ import { listWorkflowPrefs, prefsKey, workflowAlerts } from '@/lib/workflow-pref
 export const metadata: Metadata = { title: 'Workflows' }
 
 export default async function WorkflowsPage() {
+  const filter = await getInstanceFilter()
+  const instances = listInstances()
+  const paused = filter ? instances.find(i => i.id === filter)?.paused : !isConfigured() && instances.some(i => i.hasKey && i.paused)
+  if (paused) return <><PageHeader title="Workflows" description="Import workflows from n8n into your project folders." /><EmptyState icon={Workflow} title="Instance access is paused" action={<Link href="/settings#instances" className="btn">Resume in Settings</Link>}>Resume the instance to load workflows. Its saved key and history are kept; n8n workflows continue running.</EmptyState></>
   if (!isConfigured())
     return (
       <>
@@ -25,7 +29,6 @@ export default async function WorkflowsPage() {
       </>
     )
 
-  const filter = await getInstanceFilter()
   let rows: WorkflowRow[] = []
   let instanceErrors: { instance: string; message: string }[] = []
   let error: string | null = null

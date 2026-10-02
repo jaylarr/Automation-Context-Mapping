@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
-import { Eye, EyeOff, KeyRound, Loader2, Pencil, Plus, RefreshCw, Server, Trash2, Wifi } from 'lucide-react'
+import { Eye, EyeOff, KeyRound, Loader2, Pencil, Plus, RefreshCw, Server, Trash2, Wifi, Pause, Play } from 'lucide-react'
 import {
   type ActionState,
   addInstanceAction,
@@ -10,6 +10,7 @@ import {
   syncNowAction,
   testConnectionAction,
   updateInstanceAction,
+  setInstancePausedAction,
 } from '@/app/actions'
 import { relativeTime } from '@/lib/format'
 import { ConfirmDialog } from './confirm-dialog'
@@ -20,6 +21,7 @@ export type InstanceView = {
   uid?: string
   baseUrl: string
   hasKey: boolean
+  paused: boolean
   lastSyncAt: string | null
   lastSyncStatus: string | null
 }
@@ -130,10 +132,10 @@ function InstanceDialog({
           <button type="submit" className="btn btn-primary" disabled={pending || !name.trim()}>
             {pending ? (
               <>
-                <Loader2 aria-hidden style={spin} /> Saving & testing…
+                <Loader2 aria-hidden style={spin} /> {instance?.paused ? 'Saving…' : 'Saving & testing…'}
               </>
             ) : instance ? (
-              'Save & test'
+              instance.paused ? 'Save' : 'Save & test'
             ) : (
               'Add & test'
             )}
@@ -153,15 +155,16 @@ export function InstancesManager({ instances }: { instances: InstanceView[] }) {
   const [, start] = useTransition()
 
   const run = (id: string | null, label: string, fn: () => Promise<ActionState>) => {
-    setBusy(`${id ?? 'all'}:${label}`)
+    const operation = `${id ?? 'all'}:${label}`
+    setBusy(operation)
     start(async () => {
-      const r = await fn()
-      setMessage({ id, r })
-      setBusy(null)
+      try { setMessage({ id, r: await fn() }) }
+      catch { setMessage({ id, r: { ok: false, message: 'The request could not complete. Please try again.' } }) }
+      finally { setBusy(current => current === operation ? null : current) }
     })
   }
   const isBusy = (id: string | null, label: string) => busy === `${id ?? 'all'}:${label}`
-  const connected = instances.filter((i) => i.hasKey).length
+  const connected = instances.filter((i) => i.hasKey && !i.paused).length
 
   return (
     <div className="stack-sm" style={{ gap: 'var(--s-4)' }}>
@@ -170,16 +173,16 @@ export function InstancesManager({ instances }: { instances: InstanceView[] }) {
       ) : (
         <div className="list">
           {instances.map((inst) => {
-            const failing = inst.lastSyncStatus?.startsWith('error')
+            const failing = !inst.paused && inst.lastSyncStatus?.startsWith('error')
             return (
-              <div key={inst.id} className="list-item" style={{ flexWrap: 'wrap' }}>
+              <div key={inst.id} data-instance={inst.id} className="list-item" style={{ flexWrap: 'wrap' }}>
                 <Server size={18} aria-hidden style={{ flex: 'none', marginTop: '0.15rem', color: 'var(--text-3)' }} />
                 <div className="list-body" style={{ minWidth: '14rem' }}>
                   <span className="row" style={{ gap: 'var(--s-2)' }}>
                     <strong>{inst.name}</strong>
-                    <span className="badge" data-tone={!inst.hasKey ? 'warn' : failing ? 'err' : 'ok'}>
-                      <span className="dot" data-tone={!inst.hasKey ? 'warn' : failing ? 'err' : 'ok'} />
-                      {!inst.hasKey ? 'needs API key' : failing ? 'sync failing' : 'connected'}
+                    <span className="badge" data-tone={inst.paused || !inst.hasKey ? 'warn' : failing ? 'err' : 'ok'}>
+                      <span className="dot" data-tone={inst.paused || !inst.hasKey ? 'warn' : failing ? 'err' : 'ok'} />
+                      {inst.paused ? 'Paused' : !inst.hasKey ? 'needs API key' : failing ? 'sync failing' : 'connected'}
                     </span>
                   </span>
                   <span className="list-meta mono">{inst.baseUrl}</span>
@@ -187,17 +190,21 @@ export function InstancesManager({ instances }: { instances: InstanceView[] }) {
                   <span className="list-meta">
                     {inst.hasKey ? (inst.lastSyncAt ? `Last sync ${relativeTime(inst.lastSyncAt)}` : 'Not synced yet') : 'Add its API key to start syncing'}
                     {failing && <span style={{ color: 'var(--err)' }}> · {inst.lastSyncStatus?.replace(/^error: /, '')}</span>}
-                    {!failing && inst.lastSyncStatus && inst.lastSyncStatus !== 'ok' && <span> · {inst.lastSyncStatus}</span>}
+                    {!inst.paused && !failing && inst.lastSyncStatus && inst.lastSyncStatus !== 'ok' && <span> · {inst.lastSyncStatus}</span>}
                   </span>
                   {message?.id === inst.id && <Result state={message.r} />}
+                  {inst.paused && <span className="list-meta">Control Center access paused. Key and history kept; n8n workflows continue running.</span>}
                 </div>
                 <div className="row" style={{ gap: 'var(--s-1)', marginLeft: 'auto' }}>
+                  <button type="button" className="btn" onClick={() => run(inst.id, 'pause', () => setInstancePausedAction(inst.id, !inst.paused))} disabled={isBusy(inst.id, 'pause')}>
+                    {isBusy(inst.id, 'pause') ? <Loader2 aria-hidden style={spin} /> : inst.paused ? <Play aria-hidden /> : <Pause aria-hidden />} {inst.paused ? 'Resume' : 'Pause'}
+                  </button>
                   {inst.hasKey && (
                     <>
-                      <button type="button" className="btn" onClick={() => run(inst.id, 'test', () => testConnectionAction(inst.id))} disabled={!!busy}>
+                      <button type="button" className="btn" onClick={() => run(inst.id, 'test', () => testConnectionAction(inst.id))} disabled={!!busy || inst.paused}>
                         {isBusy(inst.id, 'test') ? <Loader2 aria-hidden style={spin} /> : <Wifi aria-hidden />} Test
                       </button>
-                      <button type="button" className="btn" onClick={() => run(inst.id, 'sync', () => syncNowAction(inst.id))} disabled={!!busy}>
+                      <button type="button" className="btn" onClick={() => run(inst.id, 'sync', () => syncNowAction(inst.id))} disabled={!!busy || inst.paused}>
                         {isBusy(inst.id, 'sync') ? <Loader2 aria-hidden style={spin} /> : <RefreshCw aria-hidden />} Sync
                       </button>
                     </>

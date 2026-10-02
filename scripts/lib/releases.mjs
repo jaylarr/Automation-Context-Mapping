@@ -52,7 +52,7 @@ export function stageRelease(repo, runner = spawnSync) {
     if (result.status !== 0) throw new Error(`Release ${id}: ${args.join(' ')} failed. Active release unchanged.`)
   }
   if (!fs.existsSync(path.join(app,'.next','BUILD_ID'))) throw new Error('Build produced no BUILD_ID.')
-  const release = { id, schema: 6, rollbackCompatibleFrom: 5, createdAt: new Date().toISOString() }
+  const release = { id, schema: 7, rollbackCompatibleFrom: 5, createdAt: new Date().toISOString() }
   atomicJson(path.join(root,'release.json'), release)
   atomicJson(path.join(repo,'app','data','candidate-release.json'), release)
   return release

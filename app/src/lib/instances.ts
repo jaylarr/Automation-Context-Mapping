@@ -14,11 +14,13 @@ export type Instance = {
   name: string
   baseUrl: string
   hasKey: boolean
+  paused: boolean
+  accessRevision: number
   lastSyncAt: string | null
   lastSyncStatus: string | null
 }
 
-type Row = { id: string; uid: string; name: string; base_url: string; created_at: string }
+type Row = { id: string; uid: string; name: string; base_url: string; created_at: string; paused: number; access_revision: number }
 
 const ID_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
@@ -94,6 +96,8 @@ function toInstance(r: Row): Instance {
     name: r.name,
     baseUrl: r.base_url,
     hasKey: Boolean(apiKeyFor(r.id)),
+    paused: Boolean(r.paused),
+    accessRevision: r.access_revision,
     lastSyncAt: getMeta(`lastSyncAt:${r.id}`),
     lastSyncStatus: getMeta(`lastSyncStatus:${r.id}`),
   }
@@ -104,9 +108,41 @@ export function listInstances(): Instance[] {
   return (db.prepare('SELECT * FROM instances ORDER BY created_at, id').all() as Row[]).map(toInstance)
 }
 
-/** Instances that can actually be queried (have a key). */
+/** Instances eligible for remote access (saved key and not paused). */
 export function connectedInstances(): Instance[] {
-  return listInstances().filter((i) => i.hasKey)
+  return listInstances().filter((i) => i.hasKey && !i.paused)
+}
+
+export class InstancePausedError extends Error {
+  constructor() { super('Instance paused. Resume it in Settings.'); this.name = 'InstancePausedError' }
+}
+
+const state = globalThis as typeof globalThis & { __ccInstanceRequests?: Map<string, Set<AbortController>> }
+const requests = state.__ccInstanceRequests ??= new Map<string, Set<AbortController>>()
+
+export function assertInstanceAccess(instance: Pick<Instance, 'id'> & Partial<Pick<Instance, 'uid' | 'baseUrl' | 'accessRevision'>>): Instance {
+  const current = getInstance(instance.id)
+  if (!current) throw new Error(instance.uid !== undefined ? 'Instance removed during request.' : 'Unknown instance.')
+  if (current.paused || (instance.accessRevision !== undefined && instance.accessRevision !== current.accessRevision)) throw new InstancePausedError()
+  if ((instance.uid !== undefined && current.uid !== instance.uid) || (instance.baseUrl !== undefined && current.baseUrl !== instance.baseUrl)) throw new Error('Instance removed or changed during request.')
+  return current
+}
+
+export function registerInstanceRequest(id: string, controller: AbortController): () => void {
+  const pending = requests.get(id) ?? new Set<AbortController>()
+  pending.add(controller); requests.set(id, pending)
+  return () => { pending.delete(controller); if (!pending.size) requests.delete(id) }
+}
+
+export function setInstancePaused(id: string, paused: boolean): { instance: Instance; changed: boolean } {
+  if (!ID_RE.test(id) || !getInstance(id)) throw new Error('Unknown instance.')
+  if (typeof paused !== 'boolean') throw new Error('Invalid pause state.')
+  const changed = db.prepare('UPDATE instances SET paused = ?, access_revision = access_revision + 1 WHERE id = ? AND paused != ?').run(paused ? 1 : 0, id, paused ? 1 : 0).changes > 0
+  if (changed) {
+    invalidateCache(id)
+    for (const controller of requests.get(id) ?? []) controller.abort(new InstancePausedError())
+  }
+  return { instance: getInstance(id)!, changed }
 }
 
 export function getInstance(id: string): Instance | null {

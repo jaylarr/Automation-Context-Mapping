@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { PROJECTS_DIR, SLUG_RE } from './paths'
-import { getInstance } from './instances'
+import { getInstance, assertInstanceAccess } from './instances'
 import { readBindings } from './workflow-bindings'
 import { sanitizeWorkflow, checkImportable, findHardcodedSecret } from './sanitize-core.mjs'
 import { atomicWrite, requireSafeText } from './file-safety'
@@ -13,6 +13,7 @@ function source(slug: string, file: string, instanceId: string) {
   if (!SLUG_RE.test(slug) || !/^[\w.-]+\.json$/.test(file) || file.endsWith('.raw.json')) throw new Error('Invalid workflow file.')
   const inst = getInstance(instanceId)
   if (!inst?.hasKey) throw new Error('Choose a connected installation.')
+  assertInstanceAccess(inst)
   const raw = fs.readFileSync(path.join(PROJECTS_DIR, slug, 'workflows', file), 'utf8')
   const wf = sanitizeWorkflow(JSON.parse(raw))
   const problem = findHardcodedSecret(wf) || checkImportable(wf).join('; ')
@@ -23,7 +24,7 @@ function source(slug: string, file: string, instanceId: string) {
   const target = path.join(PROJECTS_DIR, slug, 'documentation', 'restore-mappings.json')
   const mappingRaw = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : '{}'
   const all = JSON.parse(mappingRaw)
-  const expected = createHash('sha256').update(JSON.stringify([raw, bindings, mappingRaw, inst.uid, inst.baseUrl])).digest('hex')
+  const expected = createHash('sha256').update(JSON.stringify([raw, bindings, mappingRaw, inst.uid, inst.baseUrl, inst.accessRevision])).digest('hex')
   return { inst, wf, binding, target, all, expected }
 }
 export function restoreSetup(slug: string, file: string, instanceId: string): RestoreSetup {
@@ -71,6 +72,7 @@ export async function saveRestoreSetup(slug: string, file: string, instanceId: s
     await api(s.inst, `/workflows/${encodeURIComponent(entry.id)}?excludePinnedData=true`)
   }
   const fresh = source(slug, file, instanceId)
+  assertInstanceAccess(s.inst)
   if (fresh.expected !== expected.expected) throw new Error('Setup changed while checking references. Reload setup.')
   const previous = fresh.all[fresh.inst.uid] ?? {}
   const merged = { credentials: { ...previous.credentials, ...credentials }, workflows: { ...previous.workflows, ...workflows } }

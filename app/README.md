@@ -189,16 +189,12 @@ or uncommitted files, because then the folder is the only copy. n8n itself is ne
 
 ## Per-workflow settings
 
-**Turn off all workflow logs** on the Workflows page stops detailed logging for every loaded
-workflow in the selected instance scope, including archived and filtered-out rows. Review the
-confirmation count before applying. It preserves existing logs and all unrelated preferences;
-new workflows retain their default settings. Nothing changes in n8n.
-
 Workflows set to **Stop tracking** are excluded from Overview statistics and recent failures by
-default. **Show all statistics** on Overview includes minimal observed outcomes from those
-workflows and workflows explicitly excluded from statistics. Ignored manual runs remain excluded.
-It does not resume detailed logging or reconstruct missing logs. Re-enable logging per workflow
-through its settings; its previous statistics exclusion preference is preserved.
+default. **Stop tracking** records no new execution logs, statistics, captured values or health
+updates. Existing history remains unless you explicitly select cleanup. **Show all statistics**
+includes previously recorded outcomes from stopped or excluded workflows; it does not resume
+tracking or reconstruct missing data. Ignored manual runs remain excluded. Re-enable tracking
+per workflow through its settings; its previous statistics exclusion preference is preserved.
 
 The execution chart's gray/red segments, legend and table counts open execution Logs with
 the corresponding success/failed filter. Daily segments also select that UTC day. Failed includes
@@ -211,7 +207,7 @@ them change anything in n8n:
 
 | Setting | Effect |
 |---|---|
-| **What gets logged** | All runs (default) · Errors only · Success only · Stop tracking. Stop tracking also hides the workflow from default statistics; minimal outcomes support health and the optional all-statistics view |
+| **What gets logged** | All runs (default) · Errors only · Success only · Stop tracking. Stop tracking records no new logs, statistics, captures or health updates and hides the workflow from default statistics. Existing history stays unless explicit cleanup is selected |
 | **Ignore test runs** | Skips runs started by hand from the n8n editor (execution mode `manual`) |
 | **Also remove already-logged runs** | One-off cleanup of stored runs that the new setting would no longer log |
 | **Keep this workflow's logs for N days** | Overrides the global retention (Settings) for this workflow only |
@@ -229,6 +225,20 @@ workflow without one gets a "No error workflow" badge.
 always behind a confirmation. Unpublishing turns the workflow's triggers off (nothing is deleted);
 publishing turns them on. Together with explicit Restore, these actions write to n8n, and each one is
 recorded in the activity log. If n8n refuses (e.g. a credential is missing), the dialog shows why.
+
+## Pause an instance
+
+Pause/resume an individual connection in Settings → n8n instances. Pause is persistent and keeps
+the API key, installation UID, preferences, sync cursors and saved history. It blocks all app-initiated
+n8n API access, including manual actions and scheduled sync/export; other instances continue.
+Editing a paused instance skips its connection test. Resume restores ordinary schedules without
+starting a sync immediately. Use Sync when you want an immediate fetch.
+
+Overview and Logs still show saved history, marked Paused. Health/recent-failure alerts are hidden
+while paused, without changing workflow alert settings or statistics. Retention and the shared event
+inbox continue. Pausing the Control Center does not stop workflows on the n8n server. Requests already
+received by n8n may finish; if a restore was interrupted, keep its journal and reconcile the remote
+result before retrying. Intentional pause cancellation does not count as a sync failure or add backoff.
 
 ## Workflow list cache
 

@@ -12,6 +12,7 @@ import { listInstances } from '@/lib/instances'
 import { listProjects } from '@/lib/projects'
 import { workflowAlerts } from '@/lib/workflow-prefs'
 import { getMeta } from '@/lib/settings'
+import { PausedInstancesNotice } from '@/components/paused-instances-notice'
 
 export default async function OverviewPage(props: PageProps<'/'>) {
   const includeAll = (await props.searchParams).stats === 'all'
@@ -42,7 +43,7 @@ export default async function OverviewPage(props: PageProps<'/'>) {
         description="Projects, workflow health, and what just happened across the automation workspace."
         actions={
           <>
-            {configured && (
+            {configured && !selectedInstance?.paused && (
               <ActionButton action={syncNowAction} pendingLabel="Syncing…">
                 Sync n8n
               </ActionButton>
@@ -54,6 +55,7 @@ export default async function OverviewPage(props: PageProps<'/'>) {
         }
       />
 
+      <PausedInstancesNotice instances={listInstances()} filter={instanceFilter} />
       {alerts.length > 0 && (
         <div className="notice" data-tone="err" role="alert">
           <AlertOctagon aria-hidden />
@@ -90,7 +92,7 @@ export default async function OverviewPage(props: PageProps<'/'>) {
 
       <div className="row" style={{ marginBottom: 'var(--s-3)' }}>
         <Link href={includeAll ? '/' : '/?stats=all'} className="btn" aria-pressed={includeAll}>{includeAll ? 'Show tracked statistics' : 'Show all statistics'}</Link>
-        <span className="small muted">{includeAll ? 'Includes workflows with logging off or excluded from statistics. Ignored test runs remain excluded.' : 'Workflows with logging off or excluded from statistics are hidden.'}</span>
+        <span className="small muted">{includeAll ? 'Includes previously recorded outcomes from excluded workflows. Stopped workflows record no new data. Ignored test runs remain excluded.' : 'Workflows with tracking off or excluded from statistics are hidden.'}</span>
       </div>
       <section className="grid grid-stats" aria-label="Key numbers">
         <Stat icon={FolderKanban} label="Active projects" value={active.length} note={`${projects.length} total`} />
@@ -108,7 +110,7 @@ export default async function OverviewPage(props: PageProps<'/'>) {
               All executions <ArrowRight size={14} aria-hidden />
             </Link>
           </div>
-          {configured ? (
+          {configured || listInstances().some(i => i.paused) || perDay.some(d => d.success || d.error || d.other) ? (
             <ExecChart data={perDay} instance={instanceFilter} />
           ) : (
             <EmptyState icon={Activity} title="Connect n8n to see executions" action={<Link href="/settings" className="btn">Open settings</Link>}>

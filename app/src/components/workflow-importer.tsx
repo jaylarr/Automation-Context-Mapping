@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 import { BellOff, CheckCircle2, StickyNote, CircleDot, Download, Loader2, Power, PowerOff, RefreshCw, Search, Settings2, TriangleAlert, XCircle } from 'lucide-react'
-import { importWorkflowsAction, refreshWorkflowsAction, turnOffWorkflowLogsAction } from '@/app/actions'
+import { importWorkflowsAction, refreshWorkflowsAction } from '@/app/actions'
 import type { ImportResult, WorkflowRow } from '@/lib/workflow-import'
 import { relativeTime } from '@/lib/format'
 import { ConfirmDialog } from './confirm-dialog'
@@ -62,7 +62,6 @@ export function WorkflowImporter({
   const [chosen, setChosen] = useState<Record<string, string>>({}) // id -> project for untracked rows
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [confirming, setConfirming] = useState(false)
-  const [confirmLogsOff, setConfirmLogsOff] = useState(false)
   const [results, setResults] = useState<ImportResult[] | null>(null)
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
   const [pending, start] = useTransition()
@@ -126,21 +125,6 @@ export function WorkflowImporter({
 
   return (
     <div className="stack-sm" style={{ gap: 'var(--gap)' }}>
-      <div className="row">
-        <button className="btn" disabled={pending || !rows.length} onClick={() => setConfirmLogsOff(true)}>Turn off all workflow logs</button>
-        <span className="small muted">Applies to {rows.length} workflows in the selected instance scope, including archived and filtered-out rows.</span>
-      </div>
-      <ConfirmDialog open={confirmLogsOff} title="Turn off all workflow logs?" confirmLabel={`Turn off logs (${rows.length})`} onCancel={() => setConfirmLogsOff(false)} onConfirm={() => {
-        setConfirmLogsOff(false)
-        start(async () => {
-          const result = await turnOffWorkflowLogsAction(rows.map(r => ({ instanceId: r.instanceId, workflowId: r.id, workflowName: r.name })))
-          setSavedMsg(result?.message ?? 'Could not update logging.')
-          router.refresh()
-        })
-      }}>
-        <p>Stops detailed logging for all {rows.length} workflows loaded in this instance scope and excludes them from default Overview statistics. Existing logs and other settings are kept.</p>
-        <p>Workflows continue running in n8n. Show all statistics on Overview includes their minimal outcome counts; it does not turn detailed logging back on. Future workflows keep their own default settings.</p>
-      </ConfirmDialog>
       <nav className="tabs" aria-label="Filter workflows">
         {(
           [

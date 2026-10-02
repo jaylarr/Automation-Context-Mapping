@@ -2,7 +2,7 @@ import { readBindings, saveBinding, workflowKey } from './workflow-bindings'
 import { atomicWrite } from './file-safety'
 import fs from 'node:fs'
 import path from 'node:path'
-import { type Instance, connectedInstances, getInstance } from './instances'
+import { type Instance, connectedInstances, getInstance, assertInstanceAccess, InstancePausedError } from './instances'
 import { api, listWorkflows } from './n8n'
 import { transliterate } from './transliterate'
 import { PROJECTS_DIR } from './paths'
@@ -123,9 +123,11 @@ export async function buildWorkflowRows(
     instances.map(async (inst) => {
       try {
         const r = await fetchAllWorkflows(inst, fresh)
+        assertInstanceAccess(inst)
         fetchedAt = Math.min(fetchedAt ?? r.fetchedAt, r.fetchedAt)
         return r.data.map((w) => ({ inst, w }))
       } catch (e) {
+        if (e instanceof InstancePausedError) return []
         errors.push({ instance: inst.name, message: e instanceof Error ? e.message : String(e) })
         return []
       }
@@ -188,10 +190,12 @@ function nextNumber(projectDir: string): string {
 
 export type ImportResult = { id: string; name: string; ok: boolean; message: string; project?: string; file?: string; instanceId?: string }
 
-export async function importWorkflow(instanceId: string, id: string, chosenProject: string | null): Promise<ImportResult> {
+export async function importWorkflow(instanceId: string, id: string, chosenProject: string | null, accessRevision?: number): Promise<ImportResult> {
   const inst = getInstance(instanceId)
   if (!inst) return { id, name: id, ok: false, message: 'Unknown n8n instance.' }
+  assertInstanceAccess({ ...inst, accessRevision: accessRevision ?? inst.accessRevision })
   const w: N8nWorkflowFull = await api(inst, `/workflows/${encodeURIComponent(id)}?excludePinnedData=true`)
+  assertInstanceAccess(inst)
   const tracked = indexRepoWorkflows().get(workflowKey(inst.uid, id))
   const project = tracked?.project ?? chosenProject
   if (!project || !SLUG_RE.test(project)) return { id, name: w.name, ok: false, message: 'Pick a project first.' }

@@ -10,11 +10,13 @@ export function ActionButton({
   children,
   pendingLabel,
   variant = 'default',
+  disabled = false,
 }: {
   action: () => Promise<ActionState>
   children: React.ReactNode
   pendingLabel: string
   variant?: 'default' | 'primary'
+  disabled?: boolean
 }) {
   const [pending, start] = useTransition()
   const [result, setResult] = useState<ActionState>(null)
@@ -24,7 +26,7 @@ export function ActionButton({
       <button
         type="button"
         className={`btn${variant === 'primary' ? ' btn-primary' : ''}`}
-        disabled={pending}
+        disabled={pending || disabled}
         onClick={() =>
           start(async () => {
             setResult(await action())

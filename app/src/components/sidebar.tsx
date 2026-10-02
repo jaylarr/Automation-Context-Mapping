@@ -42,9 +42,10 @@ const CONN_LABEL = {
   incomplete: () => 'n8n connected, history incomplete',
   partial: () => 'Some n8n instances not synced yet',
   off: () => 'n8n not configured',
+  paused: () => 'n8n access paused',
 } as const
 
-type SidebarInstance = { id: string; name: string; hasKey: boolean }
+type SidebarInstance = { id: string; name: string; hasKey: boolean; paused: boolean }
 
 export function Sidebar({
   conn,
@@ -106,14 +107,14 @@ export function Sidebar({
               <option value="all">All instances</option>
               {connected.map((i) => (
                 <option key={i.id} value={i.id}>
-                  {i.name}
+                  {i.name}{i.paused ? ' (Paused)' : ''}
                 </option>
               ))}
             </select>
           </div>
         )}
         <Link href="/settings#instances" className="conn">
-          <span className="dot" data-tone={conn === 'ok' ? 'ok' : conn === 'err' ? 'err' : ['backfill', 'incomplete', 'partial'].includes(conn) ? 'warn' : undefined} />
+          <span className="dot" data-tone={conn === 'ok' ? 'ok' : conn === 'err' ? 'err' : ['backfill', 'incomplete', 'partial', 'paused'].includes(conn) ? 'warn' : undefined} />
           {CONN_LABEL[conn](connectedCount)}
         </Link>
         <ThemeToggle />

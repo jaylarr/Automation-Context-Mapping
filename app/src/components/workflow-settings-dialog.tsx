@@ -15,7 +15,7 @@ const MODES: { id: LogMode; label: string; hint: string }[] = [
   { id: 'all', label: 'All runs', hint: 'Log every execution (default).' },
   { id: 'errors', label: 'Errors only', hint: 'Only failed and crashed runs are logged.' },
   { id: 'success', label: 'Success only', hint: 'Only successful runs are logged.' },
-  { id: 'off', label: 'Stop tracking', hint: 'Nothing is logged here. The workflow keeps running in n8n.' },
+  { id: 'off', label: 'Stop tracking', hint: 'Record nothing: no execution logs, statistics, captured values or health updates.' },
 ]
 
 const SNOOZES: { id: string; label: string; hours: number }[] = [
@@ -194,7 +194,7 @@ export function WorkflowSettingsDialog({
                 </label>
               ))}
             </div>
-            {logMode === 'off' && <p className="small muted">Excluded from default Overview statistics. Use Show all statistics on Overview to include minimal outcomes without saving detailed logs.</p>}
+            {logMode === 'off' && <p className="small muted">The Control Center will not record new execution data for this workflow. Its n8n workflow keeps running. Existing history stays unless you select the cleanup option below.</p>}
             <div className="options">
               <label className="option">
                 <input type="checkbox" checked={ignoreManual} onChange={(e) => setIgnoreManual(e.target.checked)} disabled={logMode === 'off'} />
@@ -227,8 +227,8 @@ export function WorkflowSettingsDialog({
                 <label className="option">
                   <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)} />
                   <span>
-                    <span className="option-title">Also remove already-logged runs that don&rsquo;t match</span>
-                    <span className="option-hint">One-off cleanup when you save.</span>
+                    <span className="option-title">{logMode === 'off' ? 'Also remove this workflow’s existing logs and statistics' : 'Also remove already-logged runs that don’t match'}</span>
+                    <span className="option-hint">One-off cleanup when you save. Other workflows are unaffected.</span>
                   </span>
                 </label>
               )}
@@ -243,7 +243,7 @@ export function WorkflowSettingsDialog({
             <CaptureEditor instanceId={workflow.instanceId} workflowId={workflow.id} value={captures} onChange={setCaptures} />
           </Section>
 
-          <Section icon={Bell} title="Alerts & Overview" description="Alerts show on the Overview and in the Needs attention tab.">
+          <Section icon={Bell} title="Alerts & Overview" description={logMode === 'off' ? 'Execution-based alerts are paused while tracking is off.' : 'Alerts show on the Overview and in the Needs attention tab.'}>
             <div className="options">
               <label className="option">
                 <input type="checkbox" checked={expectOn} onChange={(e) => setExpectOn(e.target.checked)} />

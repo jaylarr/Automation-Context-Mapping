@@ -16,8 +16,8 @@ import { redirect } from 'next/navigation'
 import { logActivity } from '@/lib/logs'
 import { api, invalidateWorkflowList, isConfigured, setWorkflowPublished, syncExecutions, testConnection } from '@/lib/n8n'
 import { type CaptureSpec, MAX_CAPTURES, type RunData, parsePath, samplePaths } from '@/lib/capture'
-import { LOG_MODES, type PrefsInput, purgeNonMatching, saveWorkflowPrefs, turnOffWorkflowLogs } from '@/lib/workflow-prefs'
-import { addInstance, clearInstanceKey, connectedInstances, getInstance, listInstances, removeInstance, updateInstance } from '@/lib/instances'
+import { LOG_MODES, type PrefsInput, purgeNonMatching, saveWorkflowPrefs } from '@/lib/workflow-prefs'
+import { addInstance, clearInstanceKey, connectedInstances, getInstance, listInstances, removeInstance, updateInstance, setInstancePaused, assertInstanceAccess, InstancePausedError } from '@/lib/instances'
 import { INSTANCE_COOKIE } from '@/lib/instance-filter'
 import { cookies } from 'next/headers'
 
@@ -236,6 +236,7 @@ export async function runAutoExportAction(): Promise<ActionState> {
     const r = await runAutoExport('manual')
     revalidatePath('/', 'layout')
     const parts = [`${r.exported.length} workflow(s) updated`]
+    if (r.canceled) parts.push('instance access paused; interrupted work stopped')
     if (r.committed.length) parts.push(`committed in ${r.committed.join(', ')}`)
     if (r.skipped.length) parts.push(`${r.skipped.length} skipped (see Logs → App activity)`)
     return { ok: r.skipped.length === 0, message: `${parts.join(', ')}.` }
@@ -274,7 +275,7 @@ export async function restoreWorkflowAction(slug: string, file: string, instance
     }
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Restore failed.'
-    logActivity({ level: 'error', action: 'workflow.restore', message: `Restore of ${slug}/${file} failed: ${message}`, project: slug })
+    if (!(e instanceof InstancePausedError)) logActivity({ level: 'error', action: 'workflow.restore', message: `Restore of ${slug}/${file} failed: ${message}`, project: slug })
     return { ok: false, message }
   }
 }
@@ -334,6 +335,8 @@ export async function setArchivedDisplayAction(value: string): Promise<ActionSta
 
 /** Sync one instance, or every connected instance when `instanceId` is omitted. */
 export async function syncNowAction(instanceId?: string): Promise<ActionState> {
+  if (instanceId && getInstance(instanceId)?.paused) return { ok: false, message: new InstancePausedError().message }
+  if (!isConfigured() && listInstances().some(i => i.hasKey && i.paused)) return { ok: false, message: 'All configured instances are paused. Resume an instance in Settings.' }
   if (!isConfigured()) return { ok: false, message: 'No n8n instance has an API key yet. Add one in Settings.' }
   try {
     const results = await syncExecutions('manual', listProjects().map((p) => p.slug), instanceId)
@@ -355,7 +358,9 @@ export async function syncNowAction(instanceId?: string): Promise<ActionState> {
 
 export async function testConnectionAction(instanceId: string): Promise<ActionState> {
   const inst = getInstance(instanceId)
+  if (inst?.paused) return { ok: false, message: new InstancePausedError().message }
   const r = await testConnection(instanceId)
+  if (!r.ok && r.error === new InstancePausedError().message) return { ok: false, message: r.error }
   logActivity({
     level: r.ok ? 'success' : 'error',
     action: 'n8n.test',
@@ -397,6 +402,7 @@ type InstanceInput = { name: string; baseUrl: string; apiKey: string }
 
 async function testAfterSave(instanceId: string, saved: string): Promise<ActionState> {
   const inst = getInstance(instanceId)
+  if (inst?.paused) return { ok: true, message: `${saved} Instance remains paused; connection testing skipped.` }
   if (!inst?.hasKey) return { ok: true, message: `${saved} Add an API key to start syncing.` }
   const test = await testConnection(instanceId)
   return test.ok
@@ -443,6 +449,15 @@ export async function clearInstanceKeyAction(id: string): Promise<ActionState> {
   logActivity({ level: 'warn', action: 'instance.update', message: `Removed the API key of "${getInstance(id)?.name ?? id}"` })
   revalidatePath('/', 'layout')
   return { ok: true, message: 'API key removed. This instance no longer syncs.' }
+}
+
+export async function setInstancePausedAction(id: string, paused: boolean): Promise<ActionState> {
+  try {
+    const { instance, changed } = setInstancePaused(id, paused)
+    if (changed) logActivity({ level: 'info', action: paused ? 'instance.pause' : 'instance.resume', message: `${paused ? 'Paused' : 'Resumed'} Control Center access to "${instance.name}"`, meta: { id } })
+    revalidatePath('/', 'layout')
+    return { ok: true, message: paused ? 'Instance paused. Key and history kept. n8n workflows continue running.' : 'Instance resumed. Normal scheduling restored; use Sync to fetch now.' }
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : 'Could not change pause state.' } }
 }
 
 export async function removeInstanceAction(id: string): Promise<ActionState> {
@@ -503,17 +518,6 @@ const optInt = (v: unknown, min: number, max: number): number | null | undefined
   if (v === null || v === '' || v === undefined) return null
   const n = Number(v)
   return Number.isInteger(n) && n >= min && n <= max ? n : undefined
-}
-
-export async function turnOffWorkflowLogsAction(targets: { instanceId: string; workflowId: string; workflowName: string }[]): Promise<ActionState> {
-  if (!Array.isArray(targets) || !targets.length || targets.length > 5000 || targets.some(t => !t || !getInstance(t.instanceId) || !/^[A-Za-z0-9_-]{1,64}$/.test(t.workflowId) || typeof t.workflowName !== 'string' || t.workflowName.length > 300))
-    return { ok: false, message: 'Invalid workflow selection. Refresh the workflow list.' }
-  try {
-    turnOffWorkflowLogs(targets)
-    logActivity({ action: 'workflow.logging.off', message: `Detailed logging turned off for ${targets.length} workflows. Excluded from default statistics; existing logs kept.` })
-    revalidatePath('/', 'layout')
-    return { ok: true, message: `Logging off for ${targets.length} workflows. Existing logs kept. Use Show all statistics on Overview to include their outcomes.` }
-  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : 'Could not update logging.' } }
 }
 
 export async function saveWorkflowPrefsAction(
@@ -622,7 +626,7 @@ export async function setPublishedAction(instanceId: string, workflowId: string,
     await setWorkflowPublished(instanceId, workflowId, publish)
   } catch (e) {
     const message = e instanceof Error ? e.message : `${verb} failed.`
-    logActivity({ level: 'error', action: `workflow.${verb.toLowerCase()}`, message: `${verb} of "${workflowName}" on ${inst.name} failed: ${message}`, meta: { instance: instanceId, workflowId } })
+    if (!(e instanceof InstancePausedError)) logActivity({ level: 'error', action: `workflow.${verb.toLowerCase()}`, message: `${verb} of "${workflowName}" on ${inst.name} failed: ${message}`, meta: { instance: instanceId, workflowId } })
     return { ok: false, message }
   }
   logActivity({ level: 'warn', action: `workflow.${verb.toLowerCase()}`, message: `${verb}ed "${workflowName}" on ${inst.name}`, meta: { instance: instanceId, workflowId } })
@@ -644,11 +648,11 @@ export async function refreshWorkflowsAction(): Promise<void> {
 // ------------------------------------------------------------------ import workflows from n8n
 
 export async function importWorkflowsAction(items: { instanceId: string; id: string; project: string | null }[]): Promise<ImportResult[]> {
-  if (!isConfigured()) return items.map((i) => ({ id: i.id, name: i.id, ok: false, message: 'n8n is not connected (Settings).', instanceId: i.instanceId }))
+  const revisions = new Map(listInstances().map(i => [i.id, i.accessRevision]))
   const results: ImportResult[] = []
   for (const item of items.slice(0, 200)) {
     try {
-      results.push(await importWorkflow(String(item.instanceId), String(item.id), item.project))
+      results.push(await importWorkflow(String(item.instanceId), String(item.id), item.project, revisions.get(item.instanceId)))
     } catch (e) {
       results.push({ id: item.id, name: item.id, ok: false, message: e instanceof Error ? e.message : 'Import failed.', instanceId: item.instanceId })
     }
@@ -673,8 +677,11 @@ export async function createProjectAndImportAction(
   workflowId: string,
 ): Promise<{ ok: boolean; message: string; result?: ImportResult }> {
   const slug = input.slug.trim()
+  const snapshot = getInstance(instanceId)
   try {
+    assertInstanceAccess({ id: instanceId })
     await createProject({ slug, client: input.client.trim(), purpose: input.purpose.trim(), website: input.website })
+    assertInstanceAccess(snapshot!)
   } catch (e) {
     const message = e instanceof Error ? e.message.split('\n')[0] : 'Could not create the project.'
     logActivity({ level: 'error', action: 'project.create', message: `Create failed for "${slug}": ${message}`, project: slug })

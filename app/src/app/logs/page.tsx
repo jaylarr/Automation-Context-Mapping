@@ -11,6 +11,7 @@ import { LEVELS, knownProjectsInLogs, listActivity, listEvents, listExecutions }
 import { isConfigured } from '@/lib/n8n'
 import { getInstanceFilter } from '@/lib/instance-filter'
 import { listInstances } from '@/lib/instances'
+import { PausedInstancesNotice } from '@/components/paused-instances-notice'
 import { listProjects } from '@/lib/projects'
 import { listWorkflowPrefs } from '@/lib/workflow-prefs'
 import { parseCaptured } from '@/lib/capture'
@@ -42,7 +43,7 @@ export default async function LogsPage(props: PageProps<'/logs'>) {
   const instances = listInstances()
   const requestedInstance = get('instance')
   const instanceFilter = requestedInstance && instances.some(i => i.id === requestedInstance) ? requestedInstance : await getInstanceFilter()
-  const instanceNames = Object.fromEntries(instances.map((i) => [i.id, i.name]))
+  const instanceNames = Object.fromEntries(instances.map((i) => [i.id, `${i.name}${i.paused ? ' (Paused)' : ''}`]))
   const showInstance = !instanceFilter && instances.filter((i) => i.hasKey).length > 1
   const filters = { q: get('q'), level: get('level'), project: get('project'), page: Number(get('page')) || 1, instance: instanceFilter, day: get('day'), focus: get('focus') }
   const projects = [...new Set([...listProjects().map((p) => p.slug), ...knownProjectsInLogs()])].sort()
@@ -60,7 +61,7 @@ export default async function LogsPage(props: PageProps<'/logs'>) {
         title="Logs"
         description="n8n executions synced from your instance, events posted by workflows, and everything this app did."
         actions={
-          tab === 'executions' && isConfigured() ? (
+          tab === 'executions' && isConfigured() && !instances.find(i => i.id === instanceFilter)?.paused ? (
             <ActionButton action={syncNowAction} pendingLabel="Syncing…">
               Sync now
             </ActionButton>
@@ -68,6 +69,7 @@ export default async function LogsPage(props: PageProps<'/logs'>) {
         }
       />
 
+      <PausedInstancesNotice instances={instances} filter={instanceFilter} />
       <nav className="tabs" aria-label="Log type">
         {TABS.map(({ id, label, icon: Icon }) => (
           <Link key={id} href={`/logs?tab=${id}`} className="tab" aria-current={tab === id ? 'page' : undefined}>
@@ -104,10 +106,11 @@ function Executions({
   showInstance,
 }: Props & { instanceNames: Record<string, string>; showInstance: boolean }) {
   const data = listExecutions(filters)
+  const paused = filters.instance ? listInstances().find(i => i.id === filters.instance)?.paused : !isConfigured() && listInstances().some(i => i.hasKey && i.paused)
   if (data.total === 0)
     return (
-      <EmptyState icon={Activity} title={isConfigured() ? 'No executions match' : 'No n8n instance connected'} action={!isConfigured() ? <Link className="btn" href="/settings">Open settings</Link> : undefined}>
-        {isConfigured()
+      <EmptyState icon={Activity} title={paused || isConfigured() ? 'No executions match' : 'No n8n instance connected'} action={paused || !isConfigured() ? <Link className="btn" href="/settings#instances">{paused ? 'Resume in Settings' : 'Open settings'}</Link> : undefined}>
+        {paused ? 'No saved executions match these filters. Resume the instance in Settings to sync new executions.' : isConfigured()
           ? 'Adjust the filters, or run a sync to pull the latest executions.'
           : 'Add an n8n instance with its API key in Settings to sync executions.'}
       </EmptyState>

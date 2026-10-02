@@ -153,6 +153,9 @@ const MIGRATIONS: string[] = [
   INSERT INTO execution_facts(instance_id,id,workflow_id,status,mode,started_at,stopped_at,first_seen_at)
     SELECT instance_id,id,workflow_id,status,mode,started_at,stopped_at,COALESCE(first_seen_at,synced_at) FROM executions;
   `,
+  // 7: pause access without removing credentials or history; revision invalidates old work.
+  `ALTER TABLE instances ADD COLUMN paused INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0,1));
+   ALTER TABLE instances ADD COLUMN access_revision INTEGER NOT NULL DEFAULT 0;`,
 ]
 
 function open(): Database.Database {

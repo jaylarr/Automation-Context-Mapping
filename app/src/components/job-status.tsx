@@ -7,10 +7,12 @@ import { LiveRefresh } from './live-refresh'
 
 export function JobStatus() {
   const settings = getSettings()
+  const instances = listInstances()
+  const allPaused = instances.some(i => i.hasKey && i.paused) && !instances.some(i => i.hasKey && !i.paused)
   const definitions = [
-    ...listInstances().filter(i => i.hasKey).map(i => ({ id: `sync:${i.id}`, name: `Sync: ${i.name}`, interval: settings.syncIntervalMinutes * 60_000 })),
-    { id: 'auto-export', name: 'Workflow export', interval: settings.autoExportHours * 3_600_000 },
-    { id: 'retention', name: 'Log retention', interval: 3_600_000 },
+    ...instances.filter(i => i.hasKey).map(i => ({ id: `sync:${i.id}`, name: `Sync: ${i.name}`, interval: settings.syncIntervalMinutes * 60_000, paused: i.paused })),
+    { id: 'auto-export', name: 'Workflow export', interval: settings.autoExportHours * 3_600_000, paused: allPaused },
+    { id: 'retention', name: 'Log retention', interval: 3_600_000, paused: false },
   ]
   const maintenance = readMaintenanceStatus()
   return <section className="card" id="jobs"><div className="card-head"><h2>Background activity</h2><LiveRefresh /></div>
@@ -19,7 +21,7 @@ export function JobStatus() {
       const normal = d.interval && j?.finishedAt ? Date.parse(j.finishedAt) + d.interval : 0
       const retry = j?.nextRetry ? Date.parse(j.nextRetry) : 0
       const next = normal || retry ? new Date(Math.max(normal, retry)).toISOString() : null
-      return <tr key={d.id}><td>{d.name}{j?.message && <div className="small muted">{j.message}</div>}</td><td>{j?.state ?? 'Not run yet'}{j && <div className="small faint">Started {relativeTime(j.startedAt)}</div>}</td><td>{j?.lastSuccess ? relativeTime(j.lastSuccess) : 'None recorded'}</td><td>{j?.state === 'running' ? 'In progress' : !d.interval ? 'Manual only' : next ? relativeTime(next) : 'Next scheduler check'}</td></tr>
+      return <tr key={d.id}><td>{d.name}{j?.message && <div className="small muted">{j.message}</div>}</td><td>{d.paused ? 'Paused' : j?.state ?? 'Not run yet'}{j && <div className="small faint">Started {relativeTime(j.startedAt)}</div>}</td><td>{j?.lastSuccess ? relativeTime(j.lastSuccess) : 'None recorded'}</td><td>{d.paused ? 'Resume in Settings' : j?.state === 'running' ? 'In progress' : !d.interval ? 'Manual only' : next ? relativeTime(next) : 'Next scheduler check'}</td></tr>
     })}<tr><td>App maintenance{maintenance?.message && <div className="small muted">{maintenance.message}</div>}</td><td>{isMaintenanceRunning() ? 'running' : lastMaintenanceResult()}</td><td>{maintenance?.state === 'ok' && maintenance.finishedAt ? relativeTime(maintenance.finishedAt) : 'See maintenance log'}</td><td>Manual only</td></tr></tbody></table></div>
     <p className="small faint">Job success and history coverage are separate. Check installation sync status for pending history or gaps. Failed automatic jobs back off before retrying. Status refreshes when Live is enabled.</p>
   </section>

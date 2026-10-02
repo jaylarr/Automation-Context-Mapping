@@ -11,7 +11,7 @@ export const LOG_MODES: { id: LogMode; label: string; hint: string }[] = [
   { id: 'all', label: 'All runs', hint: 'Log every execution (default).' },
   { id: 'errors', label: 'Errors only', hint: 'Only failed and crashed runs are logged.' },
   { id: 'success', label: 'Success only', hint: 'Only successful runs are logged.' },
-  { id: 'off', label: 'Stop tracking', hint: 'Nothing from this workflow is logged. The workflow keeps running in n8n.' },
+  { id: 'off', label: 'Stop tracking', hint: 'Record nothing: no execution logs, statistics, captured values or health updates.' },
 ]
 
 export type WorkflowPrefs = {
@@ -133,18 +133,6 @@ export function prefsMap(instanceId?: string | null): Map<string, WorkflowPrefs>
   return new Map(listWorkflowPrefs(instanceId).map((p) => [prefsKey(p.instanceId, p.workflowId), p]))
 }
 
-/** Local preferences only; preserve every unrelated setting and all existing logs. */
-export function turnOffWorkflowLogs(targets: { instanceId: string; workflowId: string; workflowName: string }[]): void {
-  const update = db.prepare(`INSERT INTO workflow_prefs(instance_id, workflow_id, workflow_name, log_mode) VALUES(?, ?, ?, 'off')
-    ON CONFLICT(instance_id, workflow_id) DO UPDATE SET log_mode = 'off', workflow_name = excluded.workflow_name,
-    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`)
-  db.transaction(() => {
-    for (const t of targets) {
-      update.run(t.instanceId, t.workflowId, t.workflowName)
-    }
-  })()
-}
-
 export type PrefsInput = Pick<
   WorkflowPrefs,
   'logMode' | 'ignoreManual' | 'excludeFromStats' | 'expectEveryHours' | 'alertAfterFailures' | 'snoozedUntil' | 'retentionDays' | 'notes' | 'runbookUrl' | 'captures'
@@ -210,8 +198,14 @@ export function shouldLog(p: WorkflowPrefs | undefined, status: string, mode: st
 
 /** Deletes stored executions that the workflow's current settings would no longer log. */
 export function purgeNonMatching(p: WorkflowPrefs): number {
+  if (p.logMode === 'off') return db.transaction(() => {
+    const removed = db.prepare('DELETE FROM executions WHERE instance_id=? AND workflow_id=?').run(p.instanceId,p.workflowId).changes
+    db.prepare('DELETE FROM execution_facts WHERE instance_id=? AND workflow_id=?').run(p.instanceId,p.workflowId)
+    db.prepare('DELETE FROM health_carry WHERE instance_id=? AND workflow_id=?').run(p.instanceId,p.workflowId)
+    db.prepare('UPDATE workflow_prefs SET last_run_at=NULL,last_success_at=NULL,fail_streak=0 WHERE instance_id=? AND workflow_id=?').run(p.instanceId,p.workflowId)
+    return removed
+  })()
   const where: string[] = []
-  if (p.logMode === 'off') where.push('1 = 1')
   if (p.logMode === 'errors') where.push("status NOT IN ('error','crashed')")
   if (p.logMode === 'success') where.push("status <> 'success'")
   if (p.ignoreManual) where.push("mode = 'manual'")
@@ -223,7 +217,7 @@ export function purgeNonMatching(p: WorkflowPrefs): number {
 
 /**
  * Updates last run / last success / failure streak from one sync's executions (newest first).
- * Runs before the logging filter, so alerts work even for workflows set to "errors only" or "stop tracking".
+ * Runs before detailed-log filtering; fully stopped workflows do not update health.
  */
 export function recordHealth(
   instanceId: string,
@@ -241,7 +235,7 @@ export function recordHealth(
   db.transaction(() => {
     for (const [workflowId, { name, runs }] of byWorkflow) {
       const p = prefs.get(prefsKey(instanceId, workflowId))
-      if (!p) continue
+      if (!p || p.logMode === 'off') continue
       const carry = db.prepare('SELECT through_at,fail_streak,ignore_manual,last_success_at FROM health_carry WHERE instance_id=? AND workflow_id=?').get(instanceId,workflowId) as {through_at:string;fail_streak:number;ignore_manual:number;last_success_at:string|null} | undefined
       const counted = db.prepare(`SELECT status, mode, started_at AS startedAt FROM execution_facts
         WHERE instance_id = ? AND workflow_id = ? AND started_at IS NOT NULL
@@ -278,8 +272,10 @@ export type WorkflowAlert = {
 
 export function workflowAlerts(instanceId?: string | null, now = Date.now()): WorkflowAlert[] {
   const out: WorkflowAlert[] = []
+  const paused = new Set((db.prepare('SELECT id FROM instances WHERE paused = 1').all() as { id: string }[]).map(i => i.id))
   for (const p of listWorkflowPrefs(instanceId)) {
-    if (isSnoozed(p, now)) continue
+    if (paused.has(p.instanceId)) continue
+    if (p.logMode === 'off' || isSnoozed(p, now)) continue
     const name = p.workflowName ?? `Workflow ${p.workflowId}`
     if (p.alertAfterFailures && p.failStreak >= p.alertAfterFailures)
       out.push({ instanceId: p.instanceId, workflowId: p.workflowId, workflowName: name, kind: 'failing', message: `${p.failStreak} failed runs in a row`, notes: p.notes, runbookUrl: p.runbookUrl })
@@ -310,4 +306,4 @@ export const NOT_EXCLUDED_SQL = `NOT EXISTS (SELECT 1 FROM workflow_prefs wp WHE
 export const ALL_STATISTICS_SQL = `NOT EXISTS (SELECT 1 FROM workflow_prefs wp WHERE wp.instance_id = e.instance_id AND wp.workflow_id = e.workflow_id AND wp.ignore_manual = 1 AND e.mode = 'manual')`
 
 /** Same, and also hides snoozed workflows (for "recent failures" style lists). */
-export const NOT_EXCLUDED_OR_SNOOZED_SQL = `NOT EXISTS (SELECT 1 FROM workflow_prefs wp WHERE wp.instance_id = e.instance_id AND wp.workflow_id = e.workflow_id AND (wp.log_mode = 'off' OR wp.exclude_from_stats = 1 OR wp.snoozed_until > strftime('%Y-%m-%dT%H:%M:%fZ','now')))`
+export const NOT_EXCLUDED_OR_SNOOZED_SQL = `NOT EXISTS (SELECT 1 FROM instances i WHERE i.id = e.instance_id AND i.paused = 1) AND NOT EXISTS (SELECT 1 FROM workflow_prefs wp WHERE wp.instance_id = e.instance_id AND wp.workflow_id = e.workflow_id AND (wp.log_mode = 'off' OR wp.exclude_from_stats = 1 OR wp.snoozed_until > strftime('%Y-%m-%dT%H:%M:%fZ','now')))`

@@ -191,12 +191,18 @@ function compactExecutionFacts(days: number): void {
   const workflows = db.prepare('SELECT DISTINCT instance_id, workflow_id FROM execution_facts').all() as { instance_id: string; workflow_id: string }[]
   db.transaction(() => {
     for (const w of workflows) {
-      const p = db.prepare('SELECT retention_days, ignore_manual FROM workflow_prefs WHERE instance_id=? AND workflow_id=?').get(w.instance_id,w.workflow_id) as { retention_days: number | null; ignore_manual: number } | undefined
+      const p = db.prepare('SELECT retention_days, ignore_manual, log_mode FROM workflow_prefs WHERE instance_id=? AND workflow_id=?').get(w.instance_id,w.workflow_id) as { retention_days: number | null; ignore_manual: number; log_mode: string } | undefined
       const cutoff = new Date(Date.now() - Math.max(7,p?.retention_days ?? days) * 86400000).toISOString()
       const rows = db.prepare(`SELECT id,CASE WHEN started_at IS NULL THEN 'unknown' ELSE status END status,mode,COALESCE(started_at,first_seen_at,observed_at) at FROM execution_facts
         WHERE instance_id=? AND workflow_id=? AND COALESCE(started_at,first_seen_at,observed_at) < ?
         AND status NOT IN ('running','waiting','new','unknown') ORDER BY at,id`).all(w.instance_id,w.workflow_id,cutoff) as {id:string;status:string;mode:string|null;at:string}[]
       if (!rows.length) continue
+      if (p?.log_mode === 'off') {
+        // Retire old records without creating new health/statistics checkpoints while tracking is off.
+        const remove = db.prepare('DELETE FROM execution_facts WHERE instance_id=? AND id=?')
+        for (const r of rows) remove.run(w.instance_id,r.id)
+        continue
+      }
       const prev = db.prepare('SELECT * FROM health_carry WHERE instance_id=? AND workflow_id=?').get(w.instance_id,w.workflow_id) as { through_at:string; fail_streak:number; ignore_manual:number; last_success_at:string|null } | undefined
       let lastSuccess = prev?.last_success_at ?? null
       let streak = prev?.ignore_manual === (p?.ignore_manual ?? 0) ? prev.fail_streak : 0

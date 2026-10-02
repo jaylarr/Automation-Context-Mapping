@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { appendChangelog, localDate } from './changelog'
-import { getInstance, type Instance } from './instances'
+import { getInstance, type Instance, assertInstanceAccess } from './instances'
 import { api, invalidateWorkflowList } from './n8n'
 import { PROJECTS_DIR, DATABASE_PATH, SLUG_RE } from './paths'
 import { sanitizeWorkflow, findHardcodedSecret, checkImportable } from './sanitize-core.mjs'
@@ -11,7 +11,7 @@ import { atomicWrite, requireSafeText } from './file-safety'
 
 type Workflow = ReturnType<typeof sanitizeWorkflow>
 type Mapping = { credentials?: Record<string, { id: string; name: string; verified: boolean }>; workflows?: Record<string, string> }
-type Plan = { slug: string; file: string; instanceId: string; uid: string; url: string; hash: string; targetHash: string; id?: string; body: ReturnType<typeof payload>; published: boolean; expires: number }
+type Plan = { slug: string; file: string; instanceId: string; uid: string; url: string; accessRevision: number; hash: string; targetHash: string; id?: string; body: ReturnType<typeof payload>; published: boolean; expires: number }
 const plans = new Map<string, Plan>()
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v) ?? 'undefined').digest('hex')
 const API_SETTINGS = ['executionOrder','timezone','errorWorkflow','callerPolicy','callerIds','saveDataErrorExecution','saveDataSuccessExecution','saveManualExecutions','saveExecutionProgress','executionTimeout','timeSavedPerExecution','availableInMCP']
@@ -42,6 +42,7 @@ export type RestorePreview = { file: string; name: string; instance: string; act
 export async function previewRestore(slug: string, file: string, instanceId: string): Promise<RestorePreview> {
   const inst = getInstance(instanceId)
   if (!inst?.hasKey) throw new Error('Pick a connected n8n instance.')
+  assertInstanceAccess(inst)
   const source = read(slug, file)
   const same = source.binding.source.installation === inst.uid
   const ref = same ? source.binding.source : source.binding.targets.find((t) => t.installation === inst.uid)
@@ -79,6 +80,7 @@ export async function previewRestore(slug: string, file: string, instanceId: str
       wf.settings!.errorWorkflow = replacement
     }
   }
+  assertInstanceAccess(inst)
   requireSafeText(JSON.stringify(payload(wf)))
   const journal = journalPath(slug, file, inst.uid)
   if (fs.existsSync(journal)) {
@@ -89,16 +91,20 @@ export async function previewRestore(slug: string, file: string, instanceId: str
   if (plans.size >= 100) throw new Error('Too many pending restore previews. Retry after ten minutes.')
   const token = randomUUID()
   const published = Boolean(target?.active)
-  plans.set(token, { slug, file, instanceId, uid: inst.uid, url: inst.baseUrl, hash: source.hash, targetHash: hash(target), id: ref?.workflowId, body: payload(wf), published, expires: Date.now() + 600_000 })
+  assertInstanceAccess(inst)
+  plans.set(token, { slug, file, instanceId, uid: inst.uid, url: inst.baseUrl, accessRevision: inst.accessRevision, hash: source.hash, targetHash: hash(target), id: ref?.workflowId, body: payload(wf), published, expires: Date.now() + 600_000 })
   return { token, file, name: wf.name, instance: inst.name, action: target ? 'update' : 'create', published, credentials, problem: null }
 }
 export async function restoreWorkflow(slug: string, file: string, instanceId: string, confirmPublished: boolean, token: string) {
+  assertInstanceAccess({ id: instanceId })
   const plan = plans.get(token)
   plans.delete(token)
   if (!plan || plan.expires < Date.now() || plan.slug !== slug || plan.file !== file || plan.instanceId !== instanceId) throw new Error('Restore preview expired. Preview again.')
   const inst = getInstance(instanceId)
   if (!inst || inst.uid !== plan.uid || inst.baseUrl !== plan.url || read(slug, file).hash !== plan.hash) throw new Error('Source, mapping, or installation changed. Preview again.')
+  assertInstanceAccess({ ...inst, accessRevision: plan.accessRevision })
   if (hash(await existing(inst, plan.id)) !== plan.targetHash) throw new Error('Target changed after preview. Preview again.')
+  assertInstanceAccess(inst)
   if (plan.published && !confirmPublished) throw new Error('Confirm the published workflow update explicitly.')
   const journal = journalPath(slug, file, inst.uid)
   if (fs.existsSync(journal) && JSON.parse(fs.readFileSync(journal, 'utf8')).state !== 'complete') throw new Error('Another restore requires reconciliation.')
@@ -107,12 +113,14 @@ export async function restoreWorkflow(slug: string, file: string, instanceId: st
   atomicWrite(journal, JSON.stringify(record, null, 2))
   try {
     const response = await api<{ id: string }>(inst, plan.id ? `/workflows/${encodeURIComponent(plan.id)}` : '/workflows', plan.id ? 'PUT' : 'POST', plan.body)
+    assertInstanceAccess(inst)
     const id = plan.id ?? response.id
     if (!id) throw new Error('Target did not return a workflow ID.')
     record.id = id
     record.state = 'remote-applied'
     atomicWrite(journal, JSON.stringify(record, null, 2))
     const result = await existing(inst, id)
+    assertInstanceAccess(inst)
     if (!result || result.name !== plan.body.name || hash(result.nodes) !== hash(plan.body.nodes) || hash(result.connections) !== hash(plan.body.connections) || Object.entries(plan.body.settings).some(([k,v]) => hash(result.settings?.[k]) !== hash(v))) throw new Error('Restore readback differs. Reconcile the remote workflow before retrying.')
     saveBinding(slug, file, inst.uid, id, true)
     appendChangelog(path.join(/* turbopackIgnore: true */ PROJECTS_DIR, slug), `${file}: restored to ${inst.name} (${action}, ${id}; publication unchanged) (${localDate()}).`)

@@ -63,6 +63,18 @@ remote result, and reconcile it before retrying. Never repeat an uncertain creat
 
 ## Background work and recovery
 
+Pause/resume an individual connection in Settings → n8n instances. Pause is persistent and keeps
+the API key, installation UID, preferences, sync cursors and saved history. It blocks all app-initiated
+n8n API access, including manual actions and scheduled sync/export; other instances continue.
+Editing a paused instance skips its connection test. Resume restores ordinary schedules without
+starting a sync immediately. Use Sync when you want an immediate fetch.
+
+Overview and Logs still show saved history, marked Paused. Health/recent-failure alerts are hidden
+while paused, without changing workflow alert settings or statistics. Retention and the shared event
+inbox continue. Pausing the Control Center does not stop workflows on the n8n server. Requests already
+received by n8n may finish; if a restore was interrupted, keep its journal and reconcile the remote
+result before retrying. Intentional pause cancellation does not count as a sync failure or add backoff.
+
 Settings → Background activity displays sync/export/retention attempt state, last success, message
 and next scheduled attempt. Failed automatic sync/export jobs back off. A successful request is
 separate from complete history: installation status reports backfill or missing checkpoints.

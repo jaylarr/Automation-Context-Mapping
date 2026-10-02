@@ -31,7 +31,8 @@ function count(table: 'activity' | 'events' | 'executions'): number {
 
 export default function SettingsPage() {
   const instances = listInstances()
-  const connected = instances.filter((i) => i.hasKey).length
+  const connected = instances.filter((i) => i.hasKey && !i.paused).length
+  const pausedCount = instances.filter(i => i.paused).length
   const hasToken = Boolean(env.ingestToken())
   const selfManage = canSelfManage()
   const settings = getSettings()
@@ -54,11 +55,11 @@ export default function SettingsPage() {
         <div className="card" id="instances">
           <div className="card-head">
             <h2>n8n instances</h2>
-            <StatusBadge status={connected ? `${connected} connected` : 'none connected'} tone={connected ? 'ok' : 'warn'} />
+            <StatusBadge status={pausedCount ? `${connected} connected · ${pausedCount} paused` : connected ? `${connected} connected` : 'none connected'} tone={connected ? 'ok' : 'warn'} />
           </div>
           <InstancesManager instances={instances} />
           <p className="small faint">
-            Every connected instance is synced in the background. Executions link to a project when the workflow is named{' '}
+            Every connected, unpaused instance is synced in the background. Pause keeps its key and history while stopping Control Center requests. Executions link to a project when the workflow is named{' '}
             <code>[project-slug] …</code> or tagged with the slug. Syncing is read-only: it never changes anything in n8n.
           </p>
         </div>
@@ -114,7 +115,7 @@ export default function SettingsPage() {
               ? `Last run ${relativeTime(lastRun.at)}: ${lastRun.exported.length} updated, ${lastRun.committed.length} committed, ${lastRun.skipped.length} skipped.`
               : 'Not run yet.'}
           </span>
-          <ActionButton action={runAutoExportAction} pendingLabel="Exporting…">
+          <ActionButton action={runAutoExportAction} pendingLabel="Exporting…" disabled={!connected}>
             Export changed workflows now
           </ActionButton>
         </div>

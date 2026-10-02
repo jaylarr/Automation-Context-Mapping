@@ -32,7 +32,7 @@ const themeScript = `try{var t=localStorage.getItem('theme');document.documentEl
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const instances = listInstances()
-  const connected = instances.filter((i) => i.hasKey)
+  const connected = instances.filter((i) => i.hasKey && !i.paused)
   const conn = connectionState(instances)
   const filter = await getInstanceFilter()
 
@@ -46,7 +46,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Sidebar
             conn={conn}
             connectedCount={connected.length}
-            instances={instances.map((i) => ({ id: i.id, name: i.name, hasKey: i.hasKey }))}
+            instances={instances.map((i) => ({ id: i.id, name: i.name, hasKey: i.hasKey, paused: i.paused }))}
             filter={filter ?? 'all'}
           />
           <main className="main">
