@@ -8,6 +8,8 @@ import os from 'node:os'
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-navigation-'))
 process.env.WORKSPACE_ROOT = root
 process.env.DATABASE_PATH = path.join(root, 'fixture.db')
+// Instance cleanup must use this fixture's key file, including when CI supplies one.
+process.env.CONTROL_CENTER_ENV_FILE = path.join(root, '.env.local')
 process.env.CONTROL_CENTER_BACKGROUND = 'off'
 const { db } = await import('./db.ts')
 const logs = await import('./logs.ts')
