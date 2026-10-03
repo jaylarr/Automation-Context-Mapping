@@ -62,6 +62,23 @@ Automation Context Mapping/                 ← MAIN FOLDER (git repo)
 
 ## Nested AGENTS.md
 
+### Existing workflow audit projects
+
+Control Center's **New project → Audit an existing workflow instead** creates a separate project
+type. `audit-project.json` identifies it; creation needs one pasted/uploaded workflow and optional
+description. Client, purpose, general notes and supporting documents are optional context, editable
+after creation. Related source workflows can be added later.
+
+- `sources/*.raw.json`: exact immutable original bytes, SHA-256 verified, excluded from project Git.
+- `context/README.md` and `context/files/*.txt`: owner context and checked text extracts; agents read,
+  never edit. Original PDF/Word/text documents remain in the configured external private storage.
+- `versions/*.json`: separately approved candidates, not automatically linked to any live instance.
+- Private dated reports: stored outside project/workspace Git; displayed on the audit project page.
+  Source/context changes mark existing reports as needing refresh.
+
+Read [the audit operating guide](workflow-audit-projects.md) and
+[the intake skill](../Skills/n8n-workflow-audit-intake/SKILL.md). Regular projects retain the client-build lifecycle.
+
 Agents read the `AGENTS.md` closest to the file they're working on, plus the ones above it:
 
 ```

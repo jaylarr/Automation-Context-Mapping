@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm'
  * Renders workspace markdown. Relative links to other .md files are rewritten to in-app routes,
  * resolved against the current document's location. Raw HTML in markdown is not rendered.
  */
-export function Markdown({ source, docId, linkFor }: { source: string; docId: string; linkFor: (id: string) => string }) {
+export function Markdown({ source, docId, linkFor, allowImages = true }: { source: string; docId: string; linkFor: (id: string) => string; allowImages?: boolean }) {
   const baseDir = docId.includes('/') ? docId.slice(0, docId.lastIndexOf('/')) : ''
 
   const resolve = (href: string): string | null => {
@@ -32,6 +32,7 @@ export function Markdown({ source, docId, linkFor }: { source: string; docId: st
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          ...(!allowImages ? { img: ({ alt }: { alt?: string }) => <span className="muted small">[Image: {alt || 'not rendered'}]</span> } : {}),
           a: ({ href = '', children }) => {
             if (/^https?:\/\//.test(href))
               return (

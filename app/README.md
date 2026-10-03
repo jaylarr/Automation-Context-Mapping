@@ -14,6 +14,17 @@ cloud database.
 | **Docs & skills** | `AGENTS.md`, `Documentation/`, templates, and every skill, rendered with search |
 | **Settings** | **n8n instances** (add/edit/test/sync/remove any number of n8n servers; keys go to `.env.local` as `N8N_API_KEY__<ID>`), auto-sync interval, log retention, event-inbox token, **Backups** (scheduled auto-export, optional auto-commit), **Recently deleted** projects (restore within 30 days), app maintenance, DB info |
 
+## Existing workflow audits
+
+**Projects → New project → Audit an existing workflow instead** creates a separate audit type from
+pasted/uploaded JSON, with optional description and expandable client/purpose/document context.
+The page holds preserved originals, optional context, private audit reports and separately reviewed
+versions. Readable PDF/Word text extraction is local; scanned pages and unreviewed images are flagged.
+**Start an agent** supplies the audit skills and report CLI instructions. Industry fit, reuse and
+commercial/source-license assessment are included; revisions require explicit approval.
+Audit projects are excluded from live workflow backup matching and restore/import targets.
+See [the operating guide](../Documentation/workflow-audit-projects.md).
+
 ## Remediation and rollout
 
 See [the operating guide](../Documentation/control-center-operations.md) before the first upgrade. The new release runtime stages complete dependency/build directories, creates a private state snapshot, verifies the release ID, and retains the previous release. Native service transitions still need platform validation. Legacy workflow exports require explicit source-installation bindings; they are not migrated by guessing IDs.
@@ -255,6 +266,23 @@ A synced execution is linked to a project when its workflow is named `[project-s
 workspace naming convention) or tagged with the project slug.
 
 ## Design
+
+### Business context
+
+Settings → **Business context** provides an optional Markdown profile for your role,
+specialization, industries, typical clients, goals, and working preferences. Write freely or
+use the starter template, preview, then save. Clear the text and save to stop supplying context.
+One profile applies to every project in this local workspace; each installation maintains its own.
+
+The source of truth is `BUSINESS-CONTEXT.local.md` at the workspace root, excluded from Git.
+It is not stored in SQLite or included in app-state snapshots; keep a private copy for recovery.
+The project **Start an agent** prompt and root agent instructions tell agents to read it when
+present. Project requirements and workspace rules take priority over general preferences.
+Agents only edit the profile when the owner asks. Changes become available when an agent next
+reads the file; existing conversations are not automatically refreshed.
+
+Saving rejects detected secrets and stale editor versions. If another tab or editor changed the
+file, preserve your draft and reload Settings before saving again.
 
 Individual project pages show compact previews of the client brief and README (or selected document).
 Use **Show full** to expand a section and **Collapse** to close it. Brief editing and client files

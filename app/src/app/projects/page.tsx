@@ -89,6 +89,7 @@ export default async function ProjectsPage(props: PageProps<'/projects'>) {
                       <Archive size={12} aria-hidden /> archived
                     </span>
                   )}
+                  {p.kind === 'workflow-audit' && <span className="badge">audit</span>}
                   <ProjectStatusBadge status={p.status} />
                   <ProjectCardMenu slug={p.slug} name={p.name} archived={p.archived} />
                 </span>
@@ -97,32 +98,32 @@ export default async function ProjectsPage(props: PageProps<'/projects'>) {
                 {p.purpose && !p.purpose.startsWith('TODO') ? p.purpose : 'No purpose written yet.'}
               </p>
               <dl className="dl">
-                <dt>Client</dt>
-                <dd>{p.client || '—'}</dd>
+                <dt>{p.kind === 'workflow-audit' ? 'Type' : 'Client'}</dt>
+                <dd>{p.kind === 'workflow-audit' ? 'Existing workflow audit' : p.client || '—'}</dd>
                 <dt>Slug</dt>
                 <dd className="mono">{p.slug}</dd>
               </dl>
               <hr className="divider" />
               <div className="row small faint" style={{ justifyContent: 'space-between' }}>
                 <span className="row" style={{ gap: 'var(--s-4)' }}>
-                  <span className="row" style={{ gap: 'var(--s-1)' }}>
+                  {p.kind !== 'workflow-audit' && <span className="row" style={{ gap: 'var(--s-1)' }}>
                     <FileJson size={14} aria-hidden /> {p.workflows.length}
-                  </span>
-                  <span className="row" style={{ gap: 'var(--s-1)', color: p.brief === 'filled' ? undefined : 'var(--warn)' }}>
+                  </span>}
+                  {p.kind !== 'workflow-audit' && <span className="row" style={{ gap: 'var(--s-1)', color: p.brief === 'filled' ? undefined : 'var(--warn)' }}>
                     <ClipboardList size={14} aria-hidden /> {p.brief === 'filled' ? 'brief' : 'no brief'}
-                  </span>
+                  </span>}
                   {p.hasWebsite && (
                     <span className="row" style={{ gap: 'var(--s-1)' }}>
                       <Globe size={14} aria-hidden /> website
                     </span>
                   )}
-                  <span
+                  {p.kind !== 'workflow-audit' && <span
                     className="row"
                     style={{ gap: 'var(--s-1)', color: backup.tone === 'ok' ? undefined : backup.tone === 'err' ? 'var(--err)' : 'var(--warn)' }}
                     title={backup.detail}
                   >
                     <GitBranch size={14} aria-hidden /> {backup.label}
-                  </span>
+                  </span>}
                 </span>
                 <span>updated {relativeTime(p.updatedAt)}</span>
               </div>

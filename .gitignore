@@ -47,6 +47,20 @@ n8n workflows/*
 n8n workflows/REGISTRY.md
 # Personal overrides for agents: your name, credential names, instance URLs
 AGENTS.local.md
+BUSINESS-CONTEXT.local.md
+.BUSINESS-CONTEXT.local.md.*.tmp
 .claude/settings.local.json
 # Audit/update history is maintained outside the repository.
 Documentation/audits/
+
+# --- Generated application montage artifacts (sources stay tracked) ---
+project-demo/recordings/raw/*
+project-demo/public/recordings/*
+project-demo/screenshots/*
+project-demo/frames/*
+project-demo/output/*
+!project-demo/**/.gitkeep
+project-demo/.auth/
+project-demo/.ffmpeg-*/
+project-demo/.tools/
+project-demo/public/audio/

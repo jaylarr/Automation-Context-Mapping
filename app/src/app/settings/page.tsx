@@ -22,6 +22,8 @@ import { JobStatus } from '@/components/job-status'
 import { SetupChecklist } from '@/components/setup-checklist'
 import { ProjectRecovery } from '@/components/project-recovery'
 import { pendingProjectOperations } from '@/lib/project-operations'
+import { BusinessContext } from '@/components/business-context'
+import { businessContextTemplate, readBusinessContext } from '@/lib/business-context'
 
 export const metadata: Metadata = { title: 'Settings' }
 
@@ -47,6 +49,7 @@ export default function SettingsPage() {
     <>
       <PageHeader title="Settings" description="Connections, sync behavior, and the local database. Keys you save here are written to app/.env.local (gitignored), never to the database." />
       <SetupChecklist />
+      <BusinessContext {...readBusinessContext()} template={businessContextTemplate} />
       <JobStatus />
       <StateBackups backups={stateBackups()} />
       <ProjectRecovery operations={pendingProjectOperations()} />

@@ -7,6 +7,8 @@ import { getSettings, getMeta, setMeta } from './settings'
 import { prefsKey, prefsMap, recordHealth, shouldLog } from './workflow-prefs'
 import { MAX_CAPTURES, type RunData, extractCaptures } from './capture'
 import { workflowProjects } from './projects'
+import { isAuditProject } from './workflow-audit-core.mjs'
+import { WORKSPACE_ROOT } from './paths'
 
 /**
  * Client for the n8n public REST API (/api/v1), for any number of instances.
@@ -76,7 +78,7 @@ function projectFor(wf: N8nWorkflow | undefined, knownSlugs: Set<string>, tracke
   const saved = tracked.get(workflowKey(installation, String(wf.id)))
   if (saved) return saved
   const prefix = wf.name.match(/^\[([a-z0-9-]+)\]/)?.[1]
-  if (prefix) return prefix
+  if (prefix) return prefix.length <= 40 && isAuditProject(WORKSPACE_ROOT, prefix) ? null : prefix
   const tag = wf.tags?.map((t) => t.name).find((t) => knownSlugs.has(t))
   return tag ?? null
 }
@@ -214,7 +216,7 @@ export async function syncExecutions(
 ): Promise<SyncResult[]> {
   if (instanceId) assertInstanceAccess({ id: instanceId })
   const targets = instanceId ? connectedInstances().filter((i) => i.id === instanceId) : connectedInstances()
-  const slugs = new Set(knownSlugs)
+  const slugs = new Set(knownSlugs.filter(slug => !isAuditProject(WORKSPACE_ROOT, slug)))
   const results = await Promise.allSettled(
     targets.map((inst) => {
       let p = running.get(inst.id)

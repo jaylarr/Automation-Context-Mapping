@@ -6,6 +6,9 @@ description: "Select API, optional official MCP, or local JSON access for n8n wo
 # n8n workspace access
 
 Read root and project `AGENTS.md`, including the owner-maintained `client-brief/`, first.
+For `kind: workflow-audit`, read optional `context/` instead and route through
+[n8n-workflow-audit-intake](../n8n-workflow-audit-intake/SKILL.md). Originals are local evidence,
+not bound live exports; no brief/spec or live installation is required for the audit.
 The Control Center uses the public REST API; MCP is optional for agent work. Skills are
 instructions, not runtime dependencies. Load only the task skills needed for the current step.
 

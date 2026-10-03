@@ -1,0 +1,15 @@
+{
+  "title": "Automation Context Mapping",
+  "durationSeconds": 60,
+  "fps": 30,
+  "voice": "en-US-GuyNeural",
+  "segments": [
+    {"id": "01-hook", "start": 0, "end": 8, "text": "You automate everyone else's work. So why is yours scattered across tabs, chats, and forgotten workflow exports?"},
+    {"id": "02-reveal", "start": 8, "end": 15, "text": "Meet Automation Context Mapping. A workspace and Control Center built for n8n automation specialists."},
+    {"id": "03-context", "start": 15, "end": 25, "text": "Keep client briefs, project rules, and decisions together. Give your AI assistant the context to get started."},
+    {"id": "04-visibility", "start": 25, "end": 36, "text": "Connect multiple n8n instances. See execution trends, investigate failures, and flag workflows that haven't succeeded when expected."},
+    {"id": "05-backups", "start": 36, "end": 47, "text": "Spot changes in n8n. Schedule workflow exports. Track project versions. Review a restore before sending it back."},
+    {"id": "06-delivery", "start": 47, "end": 60, "text": "From the first client brief to the final handover, keep your automation work connected. Automation Context Mapping. Build with context. Deliver with confidence."}
+  ],
+  "finalScreen": {"title": "AUTOMATION CONTEXT MAPPING", "tagline": "Your workflows. Your context. Your control."}
+}

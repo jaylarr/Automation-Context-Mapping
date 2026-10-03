@@ -62,7 +62,7 @@ export default async function WorkflowsPage() {
               Couldn&rsquo;t load: {instanceErrors.map((e) => `${e.instance} (${e.message})`).join(' · ')}. Check it in Settings.
             </Notice>
           )}
-          <WorkflowImporter rows={rows} projects={listProjects().map((p) => ({ slug: p.slug, name: p.name }))} showInstance={multi && !filter} prefs={prefs} alerts={alerts} globalRetentionDays={getSettings().retentionDays} fetchedAt={fetchedAt} />
+          <WorkflowImporter rows={rows} projects={listProjects().filter(p => p.kind !== 'workflow-audit').map((p) => ({ slug: p.slug, name: p.name }))} showInstance={multi && !filter} prefs={prefs} alerts={alerts} globalRetentionDays={getSettings().retentionDays} fetchedAt={fetchedAt} />
         </>
       )}
     </>

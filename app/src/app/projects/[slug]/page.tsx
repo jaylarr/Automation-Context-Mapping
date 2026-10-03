@@ -20,11 +20,14 @@ import { backupSummary } from '@/lib/git'
 import { BackupCard } from '@/components/backup-card'
 import { RestoreButton } from '@/components/restore-button'
 import { connectedInstances } from '@/lib/instances'
+import { AuditProjectPage } from '@/components/audit-project'
+import { businessContextAgentInstruction } from '@/lib/business-context'
 
 /** What to paste into Claude Code / Codex so it starts on this project with full context. */
 function kickoffPrompt(slug: string): string {
   return [
     `Work on the automation project "${slug}" (n8n workflows/${slug}/).`,
+    businessContextAgentInstruction,
     `Read its AGENTS.md, then client-brief/ (brief.md and every file in files/), then README.md and documentation/.`,
     `Then tell me the stage it's at and the next step, and wait for my OK before building anything.`,
   ].join('\n')
@@ -40,6 +43,8 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
   const sp = await props.searchParams
   const project = getProject(slug)
   if (!project) notFound()
+  if (project.auditError) return <><PageHeader title={project.name} description="Workflow audit" /><p className="card small" role="alert">{project.auditError}</p></>
+  if (project.kind === 'workflow-audit') return <AuditProjectPage slug={slug} contextWarning={sp.contextWarning === '1'} />
 
   const docPath = typeof sp.doc === 'string' ? sp.doc : 'README.md'
   const doc = readProjectDoc(slug, docPath)

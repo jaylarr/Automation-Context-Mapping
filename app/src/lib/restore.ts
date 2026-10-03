@@ -8,6 +8,8 @@ import { PROJECTS_DIR, DATABASE_PATH, SLUG_RE } from './paths'
 import { sanitizeWorkflow, findHardcodedSecret, checkImportable } from './sanitize-core.mjs'
 import { readBindings, saveBinding } from './workflow-bindings'
 import { atomicWrite, requireSafeText } from './file-safety'
+import { isAuditProject } from './workflow-audit-core.mjs'
+import { WORKSPACE_ROOT } from './paths'
 
 type Workflow = ReturnType<typeof sanitizeWorkflow>
 type Mapping = { credentials?: Record<string, { id: string; name: string; verified: boolean }>; workflows?: Record<string, string> }
@@ -18,6 +20,7 @@ const API_SETTINGS = ['executionOrder','timezone','errorWorkflow','callerPolicy'
 function payload(w: Workflow) { return { name: w.name, nodes: w.nodes, connections: w.connections, settings: Object.fromEntries(Object.entries(w.settings ?? {}).filter(([k]) => API_SETTINGS.includes(k))) } }
 function read(slug: string, file: string) {
   if (!SLUG_RE.test(slug) || !/^[\w.-]+\.json$/.test(file) || file.endsWith('.raw.json')) throw new Error('Invalid workflow file.')
+  if (isAuditProject(WORKSPACE_ROOT, slug)) throw new Error('Audit projects cannot be restored to n8n. Move an approved version into an explicitly configured regular project first.')
   const raw = fs.readFileSync(path.join(/* turbopackIgnore: true */ PROJECTS_DIR, slug, 'workflows', file), 'utf8')
   const wf = sanitizeWorkflow(JSON.parse(raw))
   const problem = findHardcodedSecret(wf) || checkImportable(wf).join('; ')

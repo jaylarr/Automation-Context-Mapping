@@ -11,6 +11,11 @@ AI agent (Codex, Cursor, Claude Code, or others) that works here. A project fold
 > Read this file first. Then open the relevant doc in [Documentation/](Documentation/README.md)
 > and the relevant skill from [Skills/INDEX.md](Skills/INDEX.md) **before** you act.
 
+Read `BUSINESS-CONTEXT.local.md` at the workspace root if it exists. It is the owner's general
+role, industry, goals, and preferences, editable in Control Center Settings. Treat it as background
+context across projects; workspace rules and specific project requirements take priority.
+Agents read this profile and do not edit it unless the owner explicitly asks.
+
 ## 0. Start-of-task checklist (MANDATORY, every task, every agent)
 
 Do these in order before your first action. "It's a quick change" is not an exception.
@@ -19,6 +24,10 @@ Do these in order before your first action. "It's a quick change" is not an exce
       `client-brief/` (the client's own request: `brief.md` + `files/`). The brief is **read-only**
       for agents. If there's no project yet and the task is client work, use the
       `new-automation-project` skill.
+      **Workflow-audit exception:** projects with `audit-project.json` use optional `context/`
+      instead of a required client brief. Load `n8n-workflow-audit-intake`; preserve original JSON.
+      Read-only discovery needs no build spec, sizing decision or live installation. Approved
+      revisions are separate versions; live imports/execution/publication remain separate actions.
 - [ ] **Skill:** open [Skills/INDEX.md](Skills/INDEX.md) and load `n8n-workspace-access`, plus
       every skill whose trigger matches the task. Re-load a skill at the moment of decision; having
       read it earlier in the session doesn't count.

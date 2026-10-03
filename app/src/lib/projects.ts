@@ -11,6 +11,7 @@ import { INFO_LIMITS } from './project-info'
 import { projectOperation } from './project-operations'
 import { atomicWrite } from './file-safety'
 import { cache } from 'react'
+import { isAuditProject, readAudit } from './workflow-audit-core.mjs'
 
 export { SLUG_RE }
 
@@ -43,6 +44,8 @@ export type WorkflowSummary = {
 }
 
 export type Project = {
+  kind: 'automation' | 'workflow-audit'
+  auditError?: string
   slug: string
   name: string
   purpose: string
@@ -195,12 +198,17 @@ function readProject(slug: string): Project | null {
   if (readme === null) return null
 
   const name = readName(readme) || prettify(slug)
-  const purpose = readPurpose(readme)
+  const auditKind = isAuditProject(WORKSPACE_ROOT, slug)
+  let audit: ReturnType<typeof readAudit> | null = null, auditError: string | undefined
+  if (auditKind) {
+    try { audit = readAudit(WORKSPACE_ROOT, slug) } catch { auditError = 'Audit metadata is missing or invalid. Restore audit-project.json from a private recovery copy.' }
+  }
+  const purpose = audit ? audit.context.purpose || audit.context.description.replace(/\s+/g, ' ').slice(0, 200) : readPurpose(readme)
   const statusRaw = infoValue(readme, 'status').toLowerCase()
   const status = (STATUSES as readonly string[]).includes(statusRaw) ? (statusRaw as Status) : 'unknown'
 
   const wfDir = path.join(/* turbopackIgnore: true */ dir, 'workflows')
-  const workflows = fs.existsSync(wfDir)
+  const workflows = !auditKind && fs.existsSync(wfDir)
     ? fs
         .readdirSync(wfDir)
         .filter((f) => f.endsWith('.json') && !f.endsWith('.raw.json'))
@@ -231,10 +239,12 @@ function readProject(slug: string): Project | null {
   }
 
   return {
+    kind: auditKind ? 'workflow-audit' : 'automation',
+    ...(auditError ? { auditError } : {}),
     slug,
     name,
     purpose,
-    client: infoValue(readme, 'client'),
+    client: audit ? audit.context.client : infoValue(readme, 'client'),
     status,
     version: infoValue(readme, 'version'),
     started: infoValue(readme, 'started'),
@@ -243,7 +253,7 @@ function readProject(slug: string): Project | null {
     brief: briefState(dir),
     workflows,
     docs,
-    updatedAt: updatedAt.toISOString(),
+    updatedAt: audit && audit.updatedAt > updatedAt.toISOString() ? audit.updatedAt : updatedAt.toISOString(),
     archived: fs.existsSync(path.join(/* turbopackIgnore: true */ dir, ARCHIVE_MARKER)),
   }
 }
@@ -264,6 +274,7 @@ export function workflowProjects(): Map<string, string> {
   if (!fs.existsSync(PROJECTS_DIR)) return map
   for (const d of fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })) {
     if (!d.isDirectory() || d.name.startsWith('_') || d.name.startsWith('.')) continue
+    if (isAuditProject(WORKSPACE_ROOT, d.name)) continue
     const dir = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, d.name, 'workflows')
     if (!fs.existsSync(dir)) continue
     for (const b of readBindings(d.name).workflows) {

@@ -2,7 +2,7 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   // better-sqlite3 is a native module; keep it out of the bundle.
-  serverExternalPackages: ['better-sqlite3'],
+  serverExternalPackages: ['better-sqlite3', 'pdfjs-dist', 'mammoth'],
   poweredByHeader: false,
   // Each staged release owns its source and dependencies, even inside the workspace.
   turbopack: { root: process.cwd() },

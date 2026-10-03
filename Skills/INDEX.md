@@ -31,6 +31,11 @@ here, the one in this folder wins. The czlonkowski pack's `using-n8n-mcp-skills`
 | [`n8n-workflow-sections`](n8n-workflow-sections/SKILL.md) | Laying out / organizing any workflow canvas with numbered sticky-note sections (mandatory for new workflows) |
 | [`new-automation-project`](new-automation-project/SKILL.md) | Starting a project for a client; creating the project folder |
 | [`n8n-project-audit`](n8n-project-audit/SKILL.md) | Auditing / reviewing a project or workflow against its docs; suggestions (fix, improve, polish, docs, remove) applied only after the owner approves each ID |
+| [`n8n-workflow-audit-intake`](n8n-workflow-audit-intake/SKILL.md) | Supplied/internet JSON in a workflow-audit project: immutable originals, optional context, private report and approval loop |
+| [`n8n-workflow-discovery`](n8n-workflow-discovery/SKILL.md) | Explain unfamiliar workflows, translate foreign labels and inventory integrations/dependencies |
+| [`n8n-workflow-technical-audit`](n8n-workflow-technical-audit/SKILL.md) | Static correctness, reliability, security, portability and complexity review of supplied JSON |
+| [`n8n-workflow-business-assessment`](n8n-workflow-business-assessment/SKILL.md) | Industry fit, reusable value, commercial positioning and source/license uncertainty |
+| [`n8n-workflow-approved-revision`](n8n-workflow-approved-revision/SKILL.md) | Separately approved translation/improvement saved as a distinct reviewed version, with originals intact |
 | [`n8n-workflow-export`](n8n-workflow-export/SKILL.md) | Saving a workflow from n8n into the repo; sanitizing a raw export |
 | [`project-handover-docs`](project-handover-docs/SKILL.md) | Writing the client SOP / architecture doc; go-live |
 

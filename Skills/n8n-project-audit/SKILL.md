@@ -5,6 +5,11 @@ description: "Review an n8n project or workflow against its brief, specs, export
 
 # n8n Project Audit (read everything → report → ask → apply only what's approved)
 
+For supplied internet/client JSON in a `workflow-audit` project, use
+[n8n-workflow-audit-intake](../n8n-workflow-audit-intake/SKILL.md) instead. That path supports
+optional context, immutable originals, translations and industry/commercial assessment without
+requiring a client brief, live installation or spec.
+
 A full audit of a project in `n8n workflows/<slug>/`: the live workflows, the repo exports, and the
 project documents, checked against each other and against our standards. The output is a report
 with **numbered suggestions**. Nothing gets changed, archived, or removed until the owner approves

@@ -6,7 +6,7 @@ import { type Instance, connectedInstances, getInstance, assertInstanceAccess, I
 import { api, listWorkflows } from './n8n'
 import { transliterate } from './transliterate'
 import { PROJECTS_DIR } from './paths'
-import { SLUG_RE, listProjects } from './projects'
+import { SLUG_RE, listProjects, getProject } from './projects'
 import { fingerprint as coreFingerprint, findHardcodedSecret as coreFindSecret, sanitizeWorkflow as coreSanitize } from './sanitize-core.mjs'
 import { appendChangelog, localDate } from './changelog'
 
@@ -71,6 +71,7 @@ type TrackedFile = { project: string; file: string; abs: string; fingerprint: st
 function indexRepoWorkflows(): Map<string, TrackedFile> {
   const map = new Map<string, TrackedFile>()
   for (const p of listProjects()) {
+    if (p.kind === 'workflow-audit') continue
     const dir = path.join(/* turbopackIgnore: true */ PROJECTS_DIR, p.slug, 'workflows')
     if (!fs.existsSync(dir)) continue
     const bindings = readBindings(p.slug)
@@ -116,7 +117,7 @@ export async function buildWorkflowRows(
 ): Promise<{ rows: WorkflowRow[]; errors: { instance: string; message: string }[]; fetchedAt: number | null }> {
   const instances = connectedInstances().filter((i) => !instanceFilter || i.id === instanceFilter)
   const tracked = indexRepoWorkflows()
-  const projects = new Set(listProjects().map((p) => p.slug))
+  const projects = new Set(listProjects().filter(p => p.kind !== 'workflow-audit').map((p) => p.slug))
   const errors: { instance: string; message: string }[] = []
   let fetchedAt: number | null = null // oldest copy shown, for the "as of" note
   const lists = await Promise.all(
@@ -191,6 +192,7 @@ function nextNumber(projectDir: string): string {
 export type ImportResult = { id: string; name: string; ok: boolean; message: string; project?: string; file?: string; instanceId?: string }
 
 export async function importWorkflow(instanceId: string, id: string, chosenProject: string | null, accessRevision?: number): Promise<ImportResult> {
+  if (chosenProject && getProject(chosenProject)?.kind === 'workflow-audit') return { id, name: id, ok: false, message: 'Audit projects preserve local sources; choose a regular project for live workflow backups.' }
   const inst = getInstance(instanceId)
   if (!inst) return { id, name: id, ok: false, message: 'Unknown n8n instance.' }
   assertInstanceAccess({ ...inst, accessRevision: accessRevision ?? inst.accessRevision })

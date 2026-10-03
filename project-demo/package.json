@@ -1,0 +1,41 @@
+{
+  "name": "control-center-project-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "montage:check": "node scripts/check.mjs",
+    "montage:setup-check": "node scripts/setup-check.mjs",
+    "montage:record": "node scripts/record.mjs",
+    "montage:render": "node scripts/render.mjs",
+    "montage:frames": "node scripts/frames.mjs",
+    "montage:clean": "node scripts/clean.mjs",
+    "montage:studio": "remotion studio src/index.tsx",
+    "montage:render-test": "node scripts/render.mjs --setup-test",
+    "montage:ad-stills": "node scripts/ad-stills.mjs",
+    "montage:build-preview": "node scripts/build-demo.mjs",
+    "montage:audio": "node scripts/prepare-audio.mjs",
+    "montage:render-ad": "node scripts/render.mjs AutomationContextMappingAd output/automation-context-mapping-ad.mp4",
+    "montage:verify-ad": "node scripts/verify-ad.mjs",
+    "montage:typecheck": "tsc --noEmit",
+    "montage:test": "node --test scripts/helpers.test.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@remotion/bundler": "4.0.532",
+    "@remotion/cli": "4.0.532",
+    "@remotion/media": "4.0.532",
+    "@remotion/renderer": "4.0.532",
+    "@remotion/transitions": "4.0.532",
+    "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.532",
+    "typescript": "7.0.2"
+  }
+}
