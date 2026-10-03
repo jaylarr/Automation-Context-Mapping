@@ -14,6 +14,7 @@ import {
 } from '@/app/actions'
 import { relativeTime } from '@/lib/format'
 import { ConfirmDialog } from './confirm-dialog'
+import { useScrollLock } from './use-modal'
 
 export type InstanceView = {
   id: string
@@ -48,6 +49,7 @@ function InstanceDialog({
   onSaved: (r: ActionState) => void
 }) {
   const ref = useRef<HTMLDialogElement>(null)
+  useScrollLock()
   const [name, setName] = useState(instance?.name ?? '')
   const [baseUrl, setBaseUrl] = useState(instance?.baseUrl ?? 'https://')
   const [apiKey, setApiKey] = useState('')

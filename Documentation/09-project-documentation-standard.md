@@ -19,6 +19,8 @@ any project and find things in the same place.
 Optional: `documentation/meeting-notes/YYYY-MM-DD-<topic>.md`,
 `documentation/discovery.md`, and `assets/diagrams/`.
 
+`assets/diagrams/overview.json` is an optional agent-maintained project visual, displayed by Control Center. Follow [Project visuals](project-visuals.md) and the matching skill. Update it when an authorized project change alters its meaning; owner briefs/context and audit originals remain read-only. A read-only audit may propose a visual privately, but writing the derived asset needs separate authorization.
+
 ## When docs must be updated
 
 | Event | Update |

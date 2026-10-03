@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Hammer, Loader2, RotateCw, TriangleAlert } from 'lucide-react'
 import { startMaintenanceAction } from '@/app/actions'
 import { ConfirmDialog } from './confirm-dialog'
+import { useScrollLock } from './use-modal'
 
 type Action = 'restart' | 'update'
 type Health = { ok: boolean; startedAt: string; maintenanceRunning: boolean; lastResult: 'ok' | 'failed' | 'unknown' }
@@ -52,6 +53,7 @@ export function MaintenanceCard({ available, reason, log }: { available: boolean
   const [confirm, setConfirm] = useState<Action | null>(null)
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const baseline = useRef<string | null>(null)
+  useScrollLock(phase.kind === 'working')
 
   const poll = useCallback(async (action: Action, since: number) => {
     for (;;) {

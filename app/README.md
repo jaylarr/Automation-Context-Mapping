@@ -16,6 +16,8 @@ cloud database.
 
 ## Existing workflow audits
 
+**Project visuals:** optional `assets/diagrams/overview.json` files supply a dedicated, expandable **How it works** section inside opened projects of both types. The Projects list cards contain no visuals. Agents update validated project data using the shared CLI; refresh the page to see changes without rebuilding. Visuals distinguish planned/saved-source/documented test evidence and report changed sources, without claiming current live behavior. See [Project visuals](../Documentation/project-visuals.md). Existing upload/commit protections and audit report image restrictions remain in place.
+
 **Projects → New project → Audit an existing workflow instead** creates a separate audit type from
 pasted/uploaded JSON, with optional description and expandable client/purpose/document context.
 The page holds preserved originals, optional context, private audit reports and separately reviewed
@@ -82,6 +84,9 @@ Start-menu icon. Right-click the icon for shortcuts to Logs, Projects, and New p
   that doesn't start is rolled back automatically.
 
 Both ask for confirmation first. Their output is in the **Maintenance log** on the same card.
+
+Dialogs and the restart/rebuild progress overlay lock background page scrolling while open.
+Scrollable dialog content remains accessible; closing the dialog or ending maintenance restores page scrolling.
 
 The same actions from a terminal (use the full path if you're not in the workspace folder):
 

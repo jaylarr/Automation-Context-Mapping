@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react'
 import { createProjectAndImportAction } from '@/app/actions'
 import type { ImportResult } from '@/lib/workflow-import'
 import { transliterate } from '@/lib/transliterate'
+import { useScrollLock } from './use-modal'
 
 const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const STOPWORDS = new Set(['a', 'an', 'and', 'the', 'of', 'for', 'to', 'in', 'on', 'with', 'from', 'by', 'demo', 'mvp', 'production', 'test'])
@@ -36,6 +37,7 @@ export function NewProjectDialog({
   onDone: (result: ImportResult | undefined, message: string) => void
 }) {
   const ref = useRef<HTMLDialogElement>(null)
+  useScrollLock()
   const [client, setClient] = useState('')
   const [slug, setSlug] = useState(() => suggestSlug(workflow.name, workflow.suggestedSlug))
   const [purpose, setPurpose] = useState(() => workflow.name.replace(/^\[[^\]]*\]\s*/, ''))

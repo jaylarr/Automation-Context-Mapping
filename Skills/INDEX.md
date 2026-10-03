@@ -27,6 +27,7 @@ here, the one in this folder wins. The czlonkowski pack's `using-n8n-mcp-skills`
 | Skill | Load when |
 |---|---|
 | [`n8n-workspace-access`](n8n-workspace-access/SKILL.md) | Confirm transport, capabilities, target installation and evidence limits before n8n work |
+| [`project-visuals`](project-visuals/SKILL.md) | Create/refresh a project visual or maintain one during an authorized project asset/documentation update; preserve read-only audit boundaries |
 | [`n8n-project-sizing`](n8n-project-sizing/SKILL.md) | New project or big feature: estimate the node count, then ask single vs multiple workflows (mandatory before building) |
 | [`n8n-workflow-sections`](n8n-workflow-sections/SKILL.md) | Laying out / organizing any workflow canvas with numbered sticky-note sections (mandatory for new workflows) |
 | [`new-automation-project`](new-automation-project/SKILL.md) | Starting a project for a client; creating the project folder |

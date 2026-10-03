@@ -22,6 +22,7 @@ import { RestoreButton } from '@/components/restore-button'
 import { connectedInstances } from '@/lib/instances'
 import { AuditProjectPage } from '@/components/audit-project'
 import { businessContextAgentInstruction } from '@/lib/business-context'
+import { ProjectVisualCard } from '@/components/project-visual'
 
 /** What to paste into Claude Code / Codex so it starts on this project with full context. */
 function kickoffPrompt(slug: string): string {
@@ -30,6 +31,7 @@ function kickoffPrompt(slug: string): string {
     businessContextAgentInstruction,
     `Read its AGENTS.md, then client-brief/ (brief.md and every file in files/), then README.md and documentation/.`,
     `Then tell me the stage it's at and the next step, and wait for my OK before building anything.`,
+    `When the authorized task includes project visual updates, load Skills/project-visuals/SKILL.md and maintain assets/diagrams/overview.json using the shared CLI. A read-only review does not authorize that write.`,
   ].join('\n')
 }
 
@@ -77,6 +79,7 @@ export default async function ProjectPage(props: PageProps<'/projects/[slug]'>) 
 
       <section className="grid grid-main-side">
         <div className="stack">
+          <ProjectVisualCard slug={slug} />
           <ClientBrief
             slug={slug}
             state={brief.state}

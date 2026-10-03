@@ -26,6 +26,8 @@ done**.
 
 ## Templates
 
+Project visual format and agent CLI: [Project visuals](project-visuals.md).
+
 Copy these instead of starting from a blank page. `scripts/new-project.mjs` copies the project
 ones automatically.
 

@@ -88,6 +88,7 @@ Full details: [Documentation/01-workspace-structure.md](Documentation/01-workspa
 5. **Docs are part of the deliverable.** When a workflow changes, update the project's
    `documentation/` in the same change. See
       [09-project-documentation-standard.md](Documentation/09-project-documentation-standard.md).
+   When an authorized project asset/documentation update affects its visual, load `project-visuals` and maintain `assets/diagrams/overview.json`; read-only audits propose visuals privately until that asset write is authorized.
 6. **Ask before acting outward.** Get the owner's explicit approval before publishing or activating
    workflows, running production executions, touching client systems, sending messages,
    committing, or pushing.

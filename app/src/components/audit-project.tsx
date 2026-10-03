@@ -8,6 +8,7 @@ import { PageHeader, StatusBadge } from './ui'
 import { getAudit, getAuditReports, sourceIntact, auditKickoff } from '@/lib/workflow-audit'
 import { WORKSPACE_ROOT } from '@/lib/paths'
 import { relativeTime } from '@/lib/format'
+import { ProjectVisualCard } from './project-visual'
 
 export function AuditProjectPage({ slug, contextWarning = false }: { slug: string; contextWarning?: boolean }) {
   const project = getAudit(slug), prompt = auditKickoff(slug)
@@ -20,6 +21,7 @@ export function AuditProjectPage({ slug, contextWarning = false }: { slug: strin
     {contextWarning && <p className="small" role="alert" style={{ color: 'var(--warn)' }}>The project and original were saved, but supporting documents could not be saved. Add them again below.</p>}
     <section className="grid grid-main-side" style={{ overflowWrap: 'anywhere' }}>
       <div className="stack">
+        <ProjectVisualCard slug={slug} />
         <div className="card">
           <div className="card-head"><h2>Original workflows</h2><span className="faint small">Preserved sources</span></div>
           <div className="list">{project.sources.map(source => <div className="list-item" key={source.id}>
